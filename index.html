@@ -162,6 +162,9 @@ input.in:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(
   .mesa{min-height:84px}
 }
 
+.check{display:flex;gap:10px;align-items:flex-start;cursor:pointer;padding:10px 12px;border:1px solid var(--line);border-radius:10px}
+.check input{width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent);flex:none}
+.check.sm{padding:4px 0;border:0;align-items:center;gap:8px}
 /* Tablas */
 .tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
 table{width:100%;border-collapse:collapse;min-width:640px}
@@ -295,7 +298,7 @@ const mesa=id=>{const m=S.mesas[id];return m?clone(m):{items:[],ventaPendiente:n
 const ventas=()=>Object.entries(S.ventas).map(([id,v])=>({id,...v})).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
 function reservado(pid,salvo){let n=0;for(const[mid,m]of Object.entries(S.mesas)){if(mid===salvo)continue;for(const it of(m.items||[]))if(it.pid===pid)n+=it.cant}return n}
 function enMesa(mid,pid){const it=(S.mesas[mid]?.items||[]).find(i=>i.pid===pid);return it?it.cant:0}
-function nivel(p){const s=Number(p.stock)||0;if(s<=0)return'out';if(s<=(Number(p.minimo)||0))return'low';return'ok'}
+function nivel(p){if(p.ilimitado)return p.agotado?'out':'ok';const s=Number(p.stock)||0;if(s<=0)return'out';if(s<=(Number(p.minimo)||0))return'low';return'ok'}
 const alertas=()=>prods().filter(p=>nivel(p)!=='ok');
 const totalMesa=m=>(m.items||[]).reduce((a,it)=>{const p=S.productos[it.pid];return a+(p?Number(p.precio):0)*it.cant},0);
 const numBoleta=v=>v.serie+'-'+String(v.numero).padStart(8,'0');
@@ -311,8 +314,8 @@ function setQty(mid,pid,n){
   const m=mesa(mid); if(m.ventaPendiente){toast('Esta mesa ya tiene boleta emitida. Toca “Modificar pedido” para cambiarlo.','warn');return}
   const p=S.productos[pid]; if(!p)return;
   n=Math.max(0,Math.floor(Number(n)||0));
-  const max=Math.max(0,(Number(p.stock)||0)-reservado(pid,mid));
-  if(n>max){toast(max>0?`Solo hay ${max} de ${p.nombre} disponibles.`:`${p.nombre} está agotado.`,'warn');n=max}
+  const max=p.ilimitado?(p.agotado?0:Infinity):Math.max(0,(Number(p.stock)||0)-reservado(pid,mid));
+  if(n>max&&n>enMesa(mid,pid)){toast(max>0?`Solo hay ${max} de ${p.nombre} disponibles.`:`${p.nombre} está agotado.`,'warn');n=max}
   const i=m.items.findIndex(x=>x.pid===pid);
   if(n<=0){if(i>=0)m.items.splice(i,1)}else if(i>=0)m.items[i].cant=n;else m.items.push({pid,cant:n});
   if(!m.abiertaEn&&m.items.length)m.abiertaEn=new Date().toISOString();
@@ -351,7 +354,7 @@ function confirmarPago(id,metodo,recibido){
   if(metodo==='Efectivo'){const r=Number(recibido)||v.total;nv.recibido=r;nv.vuelto=Math.max(0,Math.round((r-v.total)*100)/100)}
   put('ventas',id,nv);
   const nuevos=[];
-  for(const it of v.items){const p=S.productos[it.pid];if(!p)continue;const antes=nivel(p);const np={...clone(p),stock:Math.max(0,(Number(p.stock)||0)-it.cant)};put('productos',it.pid,np);const des=nivel(np);if(des!=='ok'&&antes!==des)nuevos.push(np)}
+  for(const it of v.items){const p=S.productos[it.pid];if(!p||p.ilimitado)continue;const antes=nivel(p);const np={...clone(p),stock:Math.max(0,(Number(p.stock)||0)-it.cant)};put('productos',it.pid,np);const des=nivel(np);if(des!=='ok'&&antes!==des)nuevos.push(np)}
   const m=S.mesas[v.mesaId]; if(m&&m.ventaPendiente===id)put('mesas',v.mesaId,{items:[],ventaPendiente:null,abiertaEn:null});
   ui.modal=null; render();
   toast(`Pago confirmado: ${numBoleta(v)} · ${money(v.total)}`+(nv.vuelto?` · vuelto ${money(nv.vuelto)}`:''));
@@ -380,7 +383,7 @@ function guardarProd(){
   if(!nombre){toast('Escribe el nombre del producto.','warn');return}
   const precio=Number(f.precio); if(!(precio>=0)||f.precio===''){toast('Escribe un precio válido.','warn');return}
   const id=ui.modal.id||uid(); const prev=S.productos[id]||{};
-  put('productos',id,{nombre,categoria:String(f.categoria||'').trim()||'General',precio:Math.round(precio*100)/100,stock:Math.max(0,Math.floor(Number(f.stock)||0)),minimo:Math.max(0,Math.floor(Number(f.minimo)||0))});
+  put('productos',id,{nombre,categoria:String(f.categoria||'').trim()||'General',precio:Math.round(precio*100)/100,stock:Math.max(0,Math.floor(Number(f.stock)||0)),minimo:Math.max(0,Math.floor(Number(f.minimo)||0)),ilimitado:!!f.ilimitado,agotado:!!(f.ilimitado&&f.agotado)});
   ui.modal=null;render();toast(prev.nombre?`${nombre} actualizado.`:`${nombre} registrado.`);
 }
 function ajustarStock(id,d){const p=S.productos[id];if(!p)return;put('productos',id,{...clone(p),stock:Math.max(0,(Number(p.stock)||0)+d)});render()}
@@ -429,8 +432,8 @@ function vPicker(){
   return `<section class="panel picker"><div class="row"><h3>Agregar al pedido · ${esc(MESAS.find(x=>x.id===mid).n)}</h3><span class="spacer"></span>${locked?'<span class="pill warn">Boleta emitida</span>':''}</div>
   <input class="in" id="q" type="search" placeholder="Buscar producto…" value="${esc(ui.q)}" data-in="q" autocomplete="off">
   <div class="chips">${cats.map(c=>`<button class="chip" data-act="cat" data-v="${esc(c)}" aria-pressed="${ui.cat===c}">${esc(c)}</button>`).join('')}</div>
-  <div class="prods">${list.map(p=>{const disp=(Number(p.stock)||0)-reservado(p.id,mid)-enMesa(mid,p.id);const lv=nivel(p);
-    return `<button class="prod" data-act="add" data-v="${p.id}" ${disp<=0||locked?'disabled':''}><b>${esc(p.nombre)}</b><span class="p">${money(p.precio)}</span><span class="s ${lv==='out'||disp<=0?'bad':lv==='low'?'warn':''}">${disp<=0?'Sin stock':`Quedan ${disp}`}</span></button>`}).join('')||'<div class="muted">Nada coincide con la búsqueda.</div>'}</div></section>`;
+  <div class="prods">${list.map(p=>{const disp=p.ilimitado?(p.agotado?0:Infinity):(Number(p.stock)||0)-reservado(p.id,mid)-enMesa(mid,p.id);const lv=nivel(p);
+    return `<button class="prod" data-act="add" data-v="${p.id}" ${disp<=0||locked?'disabled':''}><b>${esc(p.nombre)}</b><span class="p">${money(p.precio)}</span><span class="s ${lv==='out'||disp<=0?'bad':lv==='low'?'warn':''}">${disp<=0?(p.ilimitado?'Agotado':'Sin stock'):p.ilimitado?'Disponible':`Quedan ${disp}`}</span></button>`}).join('')||'<div class="muted">Nada coincide con la búsqueda.</div>'}</div></section>`;
 }
 function vTicket(){
   const mid=ui.mesa, m=S.mesas[mid]||{items:[]}, M=MESAS.find(x=>x.id===mid);
@@ -453,7 +456,7 @@ function vTicket(){
 function vProductos(){
   const ps=prods(); const al=alertas(); const q=ui.pq.trim().toLowerCase();
   const list=ps.filter(p=>!q||p.nombre.toLowerCase().includes(q)||String(p.categoria).toLowerCase().includes(q));
-  const valor=ps.reduce((a,p)=>a+p.precio*(Number(p.stock)||0),0);
+  const valor=ps.reduce((a,p)=>a+p.precio*(p.ilimitado?0:Number(p.stock)||0),0);
   const ej=ps.some(p=>p.ejemplo);
   let h=`<div class="row"><h2>Productos e inventario</h2><span class="spacer"></span><button class="btn primary" data-act="nuevoProd">+ Nuevo producto</button></div>`;
   if(ej)h+=`<div class="banner info"><span>Los productos marcados como <b>ejemplo</b> son de muestra. Edítalos o bórralos y registra los tuyos.</span><button class="btn sm" data-act="borrarEj">Borrar ejemplos</button></div>`;
@@ -466,8 +469,8 @@ function vProductos(){
   h+=`<div class="tablebox"><table><thead><tr><th>Producto</th><th>Categoría</th><th class="r">Precio</th><th>Stock</th><th class="r">Avisar en</th><th class="r">Acciones</th></tr></thead><tbody>${list.map(p=>{
     const lv=nivel(p), s=Number(p.stock)||0, mn=Number(p.minimo)||0, pct=Math.min(100,s/Math.max(mn*3,1)*100);
     return `<tr class="${lv==='low'?'low':lv==='out'?'out':''}"><td><b>${esc(p.nombre)}</b>${p.ejemplo?'<span class="tag">ejemplo</span>':''}</td><td class="muted">${esc(p.categoria)}</td><td class="r mono">${money(p.precio)}</td>
-    <td><div class="stockcell"><button class="mini" data-act="stk" data-v="${p.id}" data-d="-1" aria-label="Restar uno">−</button><div><span class="mono">${s}</span> ${lv==='out'?'<span class="pill bad">Agotado</span>':lv==='low'?'<span class="pill warn">Por acabarse</span>':''}<div class="bar ${lv==='out'?'bad':lv==='low'?'warn':''}"><i style="width:${pct}%"></i></div></div><button class="mini" data-act="stk" data-v="${p.id}" data-d="1" aria-label="Sumar uno">+</button></div></td>
-    <td class="r mono">${mn}</td><td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" data-act="reponer" data-v="${p.id}">Reponer</button><button class="btn sm" data-act="editProd" data-v="${p.id}">Editar</button></div></td></tr>`}).join('')}</tbody></table></div>`;
+    ${p.ilimitado?`<td><label class="check sm"><input type="checkbox" id="agot-${p.id}" data-agot="${p.id}" ${p.agotado?'checked':''}>${p.agotado?'<span class="pill bad">Se acabó</span>':'<span class="pill ok">Ilimitado</span>'}</label><span class="muted" style="font-size:12px">${p.agotado?'Desmarca cuando vuelva a haber':'Marca la casilla cuando se acabe'}</span></td>`:`<td><div class="stockcell"><button class="mini" data-act="stk" data-v="${p.id}" data-d="-1" aria-label="Restar uno">−</button><div><span class="mono">${s}</span> ${lv==='out'?'<span class="pill bad">Agotado</span>':lv==='low'?'<span class="pill warn">Por acabarse</span>':''}<div class="bar ${lv==='out'?'bad':lv==='low'?'warn':''}"><i style="width:${pct}%"></i></div></div><button class="mini" data-act="stk" data-v="${p.id}" data-d="1" aria-label="Sumar uno">+</button></div></td>`}
+    <td class="r mono">${p.ilimitado?'—':mn}</td><td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${p.ilimitado?'':`<button class="btn sm" data-act="reponer" data-v="${p.id}">Reponer</button>`}<button class="btn sm" data-act="editProd" data-v="${p.id}">Editar</button></div></td></tr>`}).join('')}</tbody></table></div>`;
   return h;
 }
 function vVentas(){
@@ -574,8 +577,10 @@ function modalView(){
     <div class="field"><label for="pf-nombre">Nombre</label><input class="in" id="pf-nombre" data-mf="nombre" value="${esc(f.nombre)}" placeholder="Ej. Chicha morada 1 L"></div>
     <div class="grid2"><div class="field"><label for="pf-cat">Categoría</label><input class="in" id="pf-cat" list="cats" data-mf="categoria" value="${esc(f.categoria)}" placeholder="Bebidas"><datalist id="cats">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
     <div class="field"><label for="pf-precio">Precio de venta (S/)</label><input class="in mono" id="pf-precio" type="number" min="0" step="0.10" inputmode="decimal" data-mf="precio" value="${esc(f.precio)}"></div>
-    <div class="field"><label for="pf-stock">Cantidad que tienes</label><input class="in mono" id="pf-stock" type="number" min="0" step="1" inputmode="numeric" data-mf="stock" value="${esc(f.stock)}"></div>
-    <div class="field"><label for="pf-min">Avisarme cuando queden</label><input class="in mono" id="pf-min" type="number" min="0" step="1" inputmode="numeric" data-mf="minimo" value="${esc(f.minimo)}"></div></div>
+    ${f.ilimitado?'':`<div class="field"><label for="pf-stock">Cantidad que tienes</label><input class="in mono" id="pf-stock" type="number" min="0" step="1" inputmode="numeric" data-mf="stock" value="${esc(f.stock)}"></div>
+    <div class="field"><label for="pf-min">Avisarme cuando queden</label><input class="in mono" id="pf-min" type="number" min="0" step="1" inputmode="numeric" data-mf="minimo" value="${esc(f.minimo)}"></div>`}</div>
+    <label class="check"><input type="checkbox" id="pf-ilim" data-mfc="ilimitado" ${f.ilimitado?'checked':''}><span><b>Stock ilimitado</b><br><span class="muted" style="font-size:13px">Para platos que se preparan o cosas que no cuentas. No se descuenta nada; solo marcas cuando se acabe.</span></span></label>
+    ${f.ilimitado?`<label class="check"><input type="checkbox" id="pf-agot" data-mfc="agotado" ${f.agotado?'checked':''}><span><b>Se acabó por ahora</b><br><span class="muted" style="font-size:13px">No se podrá agregar a las mesas hasta que lo desmarques.</span></span></label>`:''}
     ${M.borrar?`<div class="banner bad"><span>¿Borrar ${esc(f.nombre)}? Las boletas anteriores no cambian.</span><button class="btn sm danger" data-act="okBorrar">Sí, borrar</button></div>`:''}
     <div class="row">${M.id&&!M.borrar?`<button class="btn danger" data-act="borrarProd">Borrar</button>`:''}<span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okProd">Guardar</button></div>`}
   if(M.k==='reponer'){const p=S.productos[M.id];if(!p)return'';b=`<h2>Reponer ${esc(p.nombre)}</h2><p class="muted" style="margin:0">Tienes <b class="mono">${p.stock}</b>. Te avisa cuando queden ${p.minimo} o menos.</p>
@@ -591,7 +596,7 @@ function modalView(){
     ${ct!==''?`<div class="diff ${d===0?'ok':d>0?'warn':'bad'}"><span>${d===0?'La caja cuadra':d>0?'Sobra':'Falta'}</span><span class="mono">${money(Math.abs(d))}</span></div>`:''}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okCerrar" ${ct===''?'disabled':''}>Cerrar caja</button></div>`}
   if(M.k==='alertas'){const al=alertas();
-    b=`<h2>Productos por reponer</h2>${al.length?`<div class="lines">${al.map(p=>`<div class="line" style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(p.nombre)}<br><span class="muted" style="font-weight:400;font-size:13px">Quedan ${p.stock} · aviso en ${p.minimo}</span></span><span style="grid-column:2;grid-row:1" class="row">${nivel(p)==='out'?'<span class="pill bad">Agotado</span>':'<span class="pill warn">Por acabarse</span>'}<button class="btn sm" data-act="reponer" data-v="${p.id}">Reponer</button></span></div>`).join('')}</div>`:'<div class="empty">Todo tu stock está bien.</div>'}<button class="btn" data-act="cerrarModal">Cerrar</button>`}
+    b=`<h2>Productos por reponer</h2>${al.length?`<div class="lines">${al.map(p=>`<div class="line" style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(p.nombre)}<br><span class="muted" style="font-weight:400;font-size:13px">${p.ilimitado?'Stock ilimitado · marcado como agotado':`Quedan ${p.stock} · aviso en ${p.minimo}`}</span></span><span style="grid-column:2;grid-row:1" class="row">${nivel(p)==='out'?'<span class="pill bad">Agotado</span>':'<span class="pill warn">Por acabarse</span>'}${p.ilimitado?`<button class="btn sm" data-act="hayOtra" data-v="${p.id}">Ya hay</button>`:`<button class="btn sm" data-act="reponer" data-v="${p.id}">Reponer</button>`}</span></div>`).join('')}</div>`:'<div class="empty">Todo tu stock está bien.</div>'}<button class="btn" data-act="cerrarModal">Cerrar</button>`}
   return `<div class="ov" data-act="ov"><div class="modal ${wide}" role="dialog" aria-modal="true">${b}</div></div>`;
 }
 
@@ -629,8 +634,8 @@ document.addEventListener('click',ev=>{
     case'okPago':confirmarPago(ui.modal.id,ui.modal.f.metodo,ui.modal.f.recibido);return;
     case'anular':ui.modal={k:'anular',id:v};break;
     case'okAnular':anular(v);return;
-    case'nuevoProd':ui.modal={k:'prod',id:null,f:{nombre:'',categoria:'',precio:'',stock:'',minimo:'5'}};break;
-    case'editProd':{const p=S.productos[v];ui.modal={k:'prod',id:v,f:{nombre:p.nombre,categoria:p.categoria,precio:String(p.precio),stock:String(p.stock),minimo:String(p.minimo)}};break}
+    case'nuevoProd':ui.modal={k:'prod',id:null,f:{nombre:'',categoria:'',precio:'',stock:'',minimo:'5',ilimitado:false,agotado:false}};break;
+    case'editProd':{const p=S.productos[v];ui.modal={k:'prod',id:v,f:{nombre:p.nombre,categoria:p.categoria,precio:String(p.precio),stock:String(p.stock??0),minimo:String(p.minimo??0),ilimitado:!!p.ilimitado,agotado:!!p.agotado}};break}
     case'okProd':guardarProd();return;
     case'borrarProd':ui.modal.borrar=true;break;
     case'okBorrar':{const n=S.productos[ui.modal.id]?.nombre;put('productos',ui.modal.id,null);ui.modal=null;toast(`${n} borrado.`);break}
@@ -644,6 +649,7 @@ document.addEventListener('click',ev=>{
     case'alertas':ui.modal={k:'alertas'};break;
     case'copiar':{const t=receiptText(S.ventas[v]);try{navigator.clipboard.writeText(t).then(()=>toast('Boleta copiada.'),()=>toast('No se pudo copiar en este navegador.','warn'))}catch(_){toast('No se pudo copiar en este navegador.','warn')}return}
     case'cerrarModal':ui.modal=null;break;
+    case'hayOtra':{const p=S.productos[v];put('productos',v,{...clone(p),agotado:false});toast(`${p.nombre} disponible otra vez.`);break}
     case'respaldo':descargarRespaldo();return;
     case'okRestaurar':{const d=ui.modal.datos;COLS.forEach(c=>S[c]=d[c]||{});saveLocal();ui.modal=null;toast('Respaldo restaurado.');break}
   }
@@ -652,11 +658,13 @@ document.addEventListener('click',ev=>{
 document.addEventListener('input',ev=>{
   const t=ev.target;
   if(t.dataset.in){ui[t.dataset.in]=t.value;render();return}
+  if(t.dataset.mfc&&ui.modal){ui.modal.f[t.dataset.mfc]=t.checked;render();return}
   if(t.dataset.mf&&ui.modal){ui.modal.f[t.dataset.mf]=t.value;if(t.dataset.live!==undefined)render();return}
 });
 document.addEventListener('change',ev=>{
   const t=ev.target;
   if(t.dataset.restore!==undefined&&t.files&&t.files[0]){restaurar(t.files[0]);t.value='';return}
+  if(t.dataset.agot){const p=S.productos[t.dataset.agot];if(p){put('productos',t.dataset.agot,{...clone(p),agotado:t.checked});render();toast(t.checked?`${p.nombre} marcado como agotado. Ya no se puede pedir.`:`${p.nombre} disponible otra vez.`,t.checked?'warn':'')}return}
   if(t.dataset.qty){setQty(ui.mesa,t.dataset.qty,t.value);return}
   if(t.dataset.nota){const m=mesa(ui.mesa);const it=m.items.find(i=>i.pid===t.dataset.nota);if(it){const n=t.value.trim();if(n)it.nota=n;else delete it.nota;put('mesas',ui.mesa,m);render()}return}
   if(t.dataset.neg){const N=neg();let val=t.value.trim();if(t.dataset.neg==='serie')val=val.toUpperCase()||'B001';if(t.dataset.neg==='nombre')val=val||'Mi negocio';put('config','negocio',{...N,[t.dataset.neg]:val});render();toast('Datos del negocio guardados.')}
