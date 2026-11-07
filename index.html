@@ -230,17 +230,17 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 
 <script>
 (function(){
-const COLS=['productos','mesas','ventas','cajas','config'];
+const COLS=['productos','mesas','ventas','cajas','config','insumos','egresos'];
 const MESAS=[{id:'m1',n:'Mesa 1'},{id:'m2',n:'Mesa 2'},{id:'m3',n:'Mesa 3'},{id:'m4',n:'Mesa 4'},{id:'m5',n:'Mesa 5'},{id:'llevar',n:'Para llevar'}];
 const METODOS=['Efectivo','Yape','Plin','Tarjeta','Transferencia'];
 const LS='cajaVirtual.v1';
-let S={productos:{},mesas:{},ventas:{},cajas:{},config:{}};
-let ui={tab:'mesas',mesa:'m1',mside:'productos',cat:'Todas',q:'',pq:'',vf:'caja',modal:null};
+let S={productos:{},mesas:{},ventas:{},cajas:{},config:{},insumos:{},egresos:{}};
+let ui={ef:'caja',tab:'mesas',mesa:'m1',mside:'productos',cat:'Todas',q:'',pq:'',vf:'caja',modal:null};
 let db=null, mode='loading', note='';
 
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const money=n=>'S/ '+(Math.round((Number(n)||0)*100)/100).toFixed(2);
+const money=n=>{const v=Math.round((Number(n)||0)*100)/100;return(v<0?'− ':'')+'S/ '+Math.abs(v).toFixed(2)};
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const clone=o=>JSON.parse(JSON.stringify(o));
 const hora=iso=>iso?new Date(iso).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}):'';
@@ -306,7 +306,8 @@ function resumenCaja(cid){
   const vs=ventas().filter(v=>v.cajaId===cid);
   const pag=vs.filter(v=>v.estado==='pagada');
   const por={};METODOS.forEach(m=>por[m]=0);pag.forEach(v=>por[v.metodo]=(por[v.metodo]||0)+v.total);
-  return{pagadas:pag.length,cobrado:pag.reduce((a,v)=>a+v.total,0),por,pend:vs.filter(v=>v.estado==='pendiente')};
+  const egs=Object.values(S.egresos||{}).filter(e=>e.cajaId===cid);
+  return{pagadas:pag.length,cobrado:pag.reduce((a,v)=>a+v.total,0),por,pend:vs.filter(v=>v.estado==='pendiente'),eg:egs.reduce((a,e)=>a+e.monto,0),egEfe:egs.filter(e=>e.metodo==='Efectivo').reduce((a,e)=>a+e.monto,0)};
 }
 
 /* ---------- acciones ---------- */
@@ -328,6 +329,50 @@ function completar(mid,metodo,recibido){
   const id=m.ventaPendiente||emitir(mid,false); if(!id)return;
   confirmarPago(id,metodo,recibido);
   ui.modal={k:'boleta',id}; ui.mside='productos'; render();
+}
+function eliminarVenta(id,repone){
+  const v=S.ventas[id]; if(!v)return;
+  let n=0;
+  if(v.estado==='pagada'&&repone){for(const it of v.items){const p=S.productos[it.pid];if(!p||p.ilimitado)continue;put('productos',it.pid,{...clone(p),stock:(Number(p.stock)||0)+it.cant});n+=it.cant}}
+  const m=S.mesas[v.mesaId]; if(m&&m.ventaPendiente===id)put('mesas',v.mesaId,{...clone(m),ventaPendiente:null});
+  put('ventas',id,null);
+  ui.modal=null;render();toast(`Boleta ${numBoleta(v)} eliminada.`+(n?` Se devolvieron ${n} unidad${n===1?'':'es'} al stock.`:''));
+}
+const insumos=()=>Object.entries(S.insumos||{}).map(([id,x])=>({id,...x})).sort((a,b)=>String(a.nombre).localeCompare(b.nombre));
+function nivelIns(i){const c=Number(i.cantidad)||0;if(c<=0)return'out';if(c<=(Number(i.minimo)||0))return'low';return'ok'}
+const alertasIns=()=>insumos().filter(i=>nivelIns(i)!=='ok');
+const r3=n=>Math.round(n*1000)/1000;
+const fmtCant=(n,u)=>`${Number((Number(n)||0).toFixed(3))} ${u||''}`.trim();
+const EGCATS=['Insumos','Servicios','Sueldos','Alquiler','Transporte','Otros'];
+const UNIDADES=['unid.','kg','g','l','ml','paquete','bolsa','caja'];
+const egresos=()=>Object.entries(S.egresos||{}).map(([id,e])=>({id,...e})).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
+function avisoIns(antes,ni){const d=nivelIns(ni);if(d!=='ok'&&d!==antes)toast(d==='out'?`Se acabó ${ni.nombre}.`:`${ni.nombre} está por acabarse: quedan ${fmtCant(ni.cantidad,ni.unidad)}.`,d==='out'?'bad':'warn')}
+function guardarIns(){
+  const f=ui.modal.f; const nombre=String(f.nombre||'').trim();
+  if(!nombre){toast('Escribe el nombre del insumo.','warn');return}
+  const id=ui.modal.id||uid(); const nuevo=!S.insumos[id];
+  put('insumos',id,{nombre,unidad:f.unidad||'unid.',cantidad:r3(Math.max(0,Number(f.cantidad)||0)),minimo:r3(Math.max(0,Number(f.minimo)||0))});
+  ui.modal=null;render();toast(nuevo?`${nombre} registrado.`:`${nombre} actualizado.`);
+}
+function registrarEgreso(e){const c=caja();put('egresos',uid(),{...e,monto:Math.round(Number(e.monto)*100)/100,fecha:new Date().toISOString(),cajaId:c.abierta?c.id:null})}
+function movIns(){
+  const M=ui.modal, i=S.insumos[M.id]; if(!i)return; const q=Number(M.f.cant);
+  if(!(q>0)){toast('Escribe una cantidad mayor a cero.','warn');return}
+  const antes=nivelIns(i), usar=M.tipo==='usar';
+  const ni={...clone(i),cantidad:r3(Math.max(0,(Number(i.cantidad)||0)+(usar?-q:q)))};
+  put('insumos',M.id,ni);
+  const costo=Number(M.f.costo);
+  if(!usar&&costo>0)registrarEgreso({descripcion:`Compra: ${i.nombre} (${fmtCant(q,i.unidad)})`,categoria:'Insumos',metodo:M.f.metodo,monto:costo});
+  ui.modal=null;render();
+  toast(usar?`Descontado ${fmtCant(q,i.unidad)} de ${i.nombre}. Quedan ${fmtCant(ni.cantidad,i.unidad)}.`:`+${fmtCant(q,i.unidad)} de ${i.nombre}.`+(costo>0?` Egreso de ${money(costo)} registrado.`:''));
+  if(usar)avisoIns(antes,ni);
+}
+function guardarEgr(){
+  const f=ui.modal.f; const d=String(f.descripcion||'').trim(); const m=Number(f.monto);
+  if(!d){toast('Escribe en qué se gastó.','warn');return}
+  if(!(m>0)){toast('Escribe un monto mayor a cero.','warn');return}
+  registrarEgreso({descripcion:d,categoria:f.categoria,metodo:f.metodo,monto:m});
+  ui.modal=null;render();toast(`Egreso de ${money(m)} registrado.`+(f.metodo==='Efectivo'&&caja().abierta?' Se descuenta del efectivo de la caja.':''));
 }
 function cancelarPedido(mid){
   const m=mesa(mid);
@@ -373,8 +418,8 @@ function abrirCaja(){
 }
 function cerrarCaja(contado){
   const c=caja(); if(!c.abierta)return; const r=resumenCaja(c.id);
-  const esperado=c.apertura+r.por.Efectivo; const ct=Number(contado)||0;
-  put('cajas',c.id,{apertura:c.apertura,abiertaEn:c.abiertaEn,cerradaEn:new Date().toISOString(),boletas:r.pagadas,cobrado:r.cobrado,porMetodo:r.por,esperado,contado:ct,diferencia:Math.round((ct-esperado)*100)/100});
+  const esperado=c.apertura+r.por.Efectivo-r.egEfe; const ct=Number(contado)||0;
+  put('cajas',c.id,{apertura:c.apertura,abiertaEn:c.abiertaEn,cerradaEn:new Date().toISOString(),boletas:r.pagadas,cobrado:r.cobrado,porMetodo:r.por,egresos:r.eg,egresosEfectivo:r.egEfe,ganancia:Math.round((r.cobrado-r.eg)*100)/100,esperado,contado:ct,diferencia:Math.round((ct-esperado)*100)/100});
   put('config','caja',{abierta:false,ultima:c.id});
   ui.modal=null;render();toast(`Caja cerrada. Vendiste ${money(r.cobrado)} en ${r.pagadas} boleta${r.pagadas===1?'':'s'}.`);toast('Recuerda descargar tu respaldo en la sección Caja.','warn');
 }
@@ -394,13 +439,13 @@ const ICON={
   bell:'<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4"/></svg>'
 };
 function topView(){
-  const c=caja(), al=alertas();
-  const tabs=[['mesas','Mesas'],['productos','Productos'],['ventas','Ventas'],['caja','Caja']];
+  const c=caja(), al=[...alertas(),...alertasIns()];
+  const tabs=[['mesas','Mesas'],['productos','Productos'],['insumos','Insumos'],['ventas','Ventas'],['egresos','Egresos'],['caja','Caja']];
   return `<div class="brand"><span class="logo">${ICON.logo}</span><div><b>${esc(neg().nombre)}</b><small>Caja virtual</small></div></div>
   <nav class="tabs" aria-label="Secciones">${tabs.map(([k,l])=>`<button class="tab" data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':''}>${l}</button>`).join('')}</nav>
   <div class="status">
     <button class="pill ${c.abierta?'ok':'neutral'}" data-act="tab" data-v="caja">${c.abierta?'Caja abierta · '+hora(c.abiertaEn):'Caja cerrada'}</button>
-    ${al.length?`<button class="pill ${al.some(p=>nivel(p)==='out')?'bad':'warn'}" data-act="alertas">${ICON.bell} ${al.length} por reponer</button>`:''}
+    ${al.length?`<button class="pill ${alertas().some(p=>nivel(p)==='out')||alertasIns().some(i=>nivelIns(i)==='out')?'bad':'warn'}" data-act="alertas">${ICON.bell} ${al.length} por reponer</button>`:''}
   </div>`;
 }
 function view(){
@@ -410,6 +455,8 @@ function view(){
   if(ui.tab==='mesas')h+=vMesas();
   if(ui.tab==='productos')h+=vProductos();
   if(ui.tab==='ventas')h+=vVentas();
+  if(ui.tab==='insumos')h+=vInsumos();
+  if(ui.tab==='egresos')h+=vEgresos();
   if(ui.tab==='caja')h+=vCaja();
   return h;
 }
@@ -488,7 +535,7 @@ function vVentas(){
   h+=`<div class="tablebox"><table><thead><tr><th>Boleta</th><th>Fecha</th><th>Mesa</th><th>Productos</th><th>Pago</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>${vs.slice(0,300).map(v=>`<tr>
    <td class="mono">${numBoleta(v)}</td><td class="muted">${fecha(v.fecha)}</td><td>${esc(v.mesa)}</td><td class="muted">${v.items.reduce((a,i)=>a+i.cant,0)}</td><td>${esc(v.metodo||'—')}</td>
    <td>${v.estado==='pagada'?'<span class="pill ok">Pagada</span>':v.estado==='pendiente'?'<span class="pill warn">Pendiente</span>':'<span class="pill neutral">Anulada</span>'}</td>
-   <td class="r mono">${money(v.total)}</td><td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${v.estado==='pendiente'?`<button class="btn sm primary" data-act="pagar" data-v="${v.id}">Cobrar</button>`:''}<button class="btn sm" data-act="boleta" data-v="${v.id}">Ver</button></div></td></tr>`).join('')}</tbody></table></div>`;
+   <td class="r mono">${money(v.total)}</td><td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${v.estado==='pendiente'?`<button class="btn sm primary" data-act="pagar" data-v="${v.id}">Cobrar</button>`:''}<button class="btn sm" data-act="boleta" data-v="${v.id}">Ver</button><button class="btn sm danger" data-act="delVenta" data-v="${v.id}">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`;
   return h;
 }
 function vCaja(){
@@ -498,17 +545,19 @@ function vCaja(){
     <div class="field"><label for="apertura">Monto inicial en efectivo (S/)</label><input class="in mono" id="apertura" type="number" min="0" step="0.10" placeholder="0.00" inputmode="decimal"></div>
     <button class="btn primary big" data-act="abrirCaja">Abrir caja</button></section>`;
   }else{
-    const r=resumenCaja(c.id); const esperado=c.apertura+r.por.Efectivo;
+    const r=resumenCaja(c.id); const esperado=c.apertura+r.por.Efectivo-r.egEfe;
     h+=`<div class="row"><h2>Caja abierta</h2><span class="muted">desde ${fecha(c.abiertaEn)}</span><span class="spacer"></span><button class="btn primary" data-act="cerrarCaja">Cerrar caja</button></div>
-    <div class="stats"><div class="stat hero"><span class="lbl">Ganado hoy (cobrado)</span><b>${money(r.cobrado)}</b><span style="font-size:13px;opacity:.85">${r.pagadas} boleta${r.pagadas===1?'':'s'}</span></div>
+    <div class="stats"><div class="stat hero"><span class="lbl">Vendido hoy</span><b>${money(r.cobrado)}</b><span style="font-size:13px;opacity:.85">${r.pagadas} boleta${r.pagadas===1?'':'s'}</span></div>
     <div class="stat"><span class="lbl">Monto inicial</span><b>${money(c.apertura)}</b></div>
-    <div class="stat"><span class="lbl">Efectivo esperado en caja</span><b>${money(esperado)}</b></div></div>
+    <div class="stat"><span class="lbl">Efectivo esperado en caja</span><b>${money(esperado)}</b></div>
+    <div class="stat"><span class="lbl">Egresos</span><b style="color:var(--bad)">− ${money(r.eg)}</b></div>
+    <div class="stat"><span class="lbl">Ganancia (ventas − egresos)</span><b style="color:${r.cobrado-r.eg<0?'var(--bad)':'var(--ok)'}">${money(r.cobrado-r.eg)}</b></div></div>
     <div class="stats">${METODOS.map(m=>`<div class="stat"><span class="lbl">${m}</span><b>${money(r.por[m])}</b></div>`).join('')}</div>
     ${r.pend.length?`<div class="banner warn"><span>Tienes ${r.pend.length} boleta${r.pend.length===1?'':'s'} pendiente${r.pend.length===1?'':'s'} de pago por ${money(r.pend.reduce((a,v)=>a+v.total,0))}.</span><button class="btn sm" data-act="tab" data-v="ventas">Ver</button></div>`:''}`;
   }
   const hist=Object.entries(S.cajas).map(([id,x])=>({id,...x})).sort((a,b)=>String(b.cerradaEn).localeCompare(a.cerradaEn));
   h+=`<h3 style="margin-top:6px">Cierres anteriores</h3>`;
-  h+=hist.length?`<div class="tablebox"><table><thead><tr><th>Apertura</th><th>Cierre</th><th class="r">Boletas</th><th class="r">Vendido</th><th class="r">Efectivo esperado</th><th class="r">Contado</th><th class="r">Diferencia</th></tr></thead><tbody>${hist.map(x=>`<tr><td class="muted">${fecha(x.abiertaEn)}</td><td class="muted">${fecha(x.cerradaEn)}</td><td class="r mono">${x.boletas}</td><td class="r mono"><b>${money(x.cobrado)}</b></td><td class="r mono">${money(x.esperado)}</td><td class="r mono">${money(x.contado)}</td><td class="r">${x.diferencia===0?'<span class="pill ok">Cuadra</span>':`<span class="pill ${x.diferencia>0?'warn':'bad'}">${x.diferencia>0?'Sobra ':'Falta '}${money(Math.abs(x.diferencia))}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">Cuando cierres tu primera caja, aquí verás cuánto ganaste cada día.</div>`;
+  h+=hist.length?`<div class="tablebox"><table><thead><tr><th>Apertura</th><th>Cierre</th><th class="r">Boletas</th><th class="r">Vendido</th><th class="r">Egresos</th><th class="r">Efectivo esperado</th><th class="r">Contado</th><th class="r">Diferencia</th></tr></thead><tbody>${hist.map(x=>`<tr><td class="muted">${fecha(x.abiertaEn)}</td><td class="muted">${fecha(x.cerradaEn)}</td><td class="r mono">${x.boletas}</td><td class="r mono"><b>${money(x.cobrado)}</b></td><td class="r mono">${money(x.egresos||0)}</td><td class="r mono">${money(x.esperado)}</td><td class="r mono">${money(x.contado)}</td><td class="r">${x.diferencia===0?'<span class="pill ok">Cuadra</span>':`<span class="pill ${x.diferencia>0?'warn':'bad'}">${x.diferencia>0?'Sobra ':'Falta '}${money(Math.abs(x.diferencia))}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">Cuando cierres tu primera caja, aquí verás cuánto ganaste cada día.</div>`;
   let ult=null; try{ult=localStorage.getItem(LS+'.ultimoRespaldo')}catch(e){}
   h+=`<section class="panel" style="max-width:640px"><h3>Respaldo de tus datos</h3><p class="muted" style="margin:0">Todo se guarda en este navegador. Descarga un respaldo al cerrar caja; si cambias de equipo o se borran los datos del navegador, lo restauras desde aquí.</p>
    <div class="row"><button class="btn primary" data-act="respaldo">Descargar respaldo</button><label class="btn" for="restore-file">Restaurar respaldo</label><input id="restore-file" type="file" accept=".json,application/json" data-restore hidden></div>
@@ -522,6 +571,34 @@ function vCaja(){
   return h;
 }
 
+function vInsumos(){
+  const is=insumos(), al=alertasIns();
+  let h=`<div class="row"><h2>Insumos</h2><span class="spacer"></span><button class="btn primary" data-act="nuevoIns">+ Nuevo insumo</button></div>
+  <p class="muted" style="margin:0;max-width:70ch">Lo que usas para preparar o atender y no vendes directamente: ingredientes, vasos, servilletas, gas. Descuéntalos cuando los uses y te avisa cuando se estén acabando.</p>`;
+  if(!is.length)return h+`<div class="empty">Aún no registras insumos.<br><br><button class="btn primary" data-act="nuevoIns">Registrar insumo</button></div>`;
+  if(al.length)h+=`<div class="banner ${al.some(i=>nivelIns(i)==='out')?'bad':'warn'}"><span><b>${al.length} insumo${al.length===1?'':'s'} por reponer:</b> ${al.map(i=>`${esc(i.nombre)} (${fmtCant(i.cantidad,i.unidad)})`).join(', ')}</span></div>`;
+  h+=`<div class="tablebox"><table><thead><tr><th>Insumo</th><th>Cantidad</th><th class="r">Avisar en</th><th class="r">Acciones</th></tr></thead><tbody>${is.map(i=>{
+    const lv=nivelIns(i), c=Number(i.cantidad)||0, mn=Number(i.minimo)||0, pct=Math.min(100,c/Math.max(mn*3,1)*100);
+    return `<tr class="${lv==='low'?'low':lv==='out'?'out':''}"><td><b>${esc(i.nombre)}</b></td>
+    <td><div class="stockcell"><button class="mini" data-act="insQ" data-v="${i.id}" data-d="-1" aria-label="Restar uno">−</button><div><span class="mono">${fmtCant(c,i.unidad)}</span> ${lv==='out'?'<span class="pill bad">Agotado</span>':lv==='low'?'<span class="pill warn">Por acabarse</span>':''}<div class="bar ${lv==='out'?'bad':lv==='low'?'warn':''}"><i style="width:${pct}%"></i></div></div><button class="mini" data-act="insQ" data-v="${i.id}" data-d="1" aria-label="Sumar uno">+</button></div></td>
+    <td class="r mono">${fmtCant(mn,i.unidad)}</td>
+    <td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="btn sm" data-act="insUsar" data-v="${i.id}">Usar</button><button class="btn sm" data-act="insRep" data-v="${i.id}">Reponer</button><button class="btn sm" data-act="editIns" data-v="${i.id}">Editar</button></div></td></tr>`}).join('')}</tbody></table></div>`;
+  return h;
+}
+function vEgresos(){
+  const c=caja(); let es=egresos(); const hoy=new Date().toDateString();
+  if(ui.ef==='caja')es=c.abierta?es.filter(e=>e.cajaId===c.id):[];
+  if(ui.ef==='hoy')es=es.filter(e=>new Date(e.fecha).toDateString()===hoy);
+  const tot=es.reduce((a,e)=>a+e.monto,0), efe=es.filter(e=>e.metodo==='Efectivo').reduce((a,e)=>a+e.monto,0);
+  let h=`<div class="row"><h2>Egresos</h2><span class="spacer"></span><div class="chips">${[['caja','Caja actual'],['hoy','Hoy'],['todas','Todos']].map(([k,l])=>`<button class="chip" data-act="ef" data-v="${k}" aria-pressed="${ui.ef===k}">${l}</button>`).join('')}</div><button class="btn primary" data-act="nuevoEgr">+ Registrar egreso</button></div>
+  <div class="stats"><div class="stat"><span class="lbl">Total gastado</span><b style="color:var(--bad)">${money(tot)}</b></div>
+  <div class="stat"><span class="lbl">Pagado en efectivo (sale de caja)</span><b>${money(efe)}</b></div>
+  <div class="stat"><span class="lbl">Registros</span><b>${es.length}</b></div></div>`;
+  if(ui.ef==='caja'&&!c.abierta)return h+`<div class="empty">No hay una caja abierta. Mira <b>Hoy</b> o <b>Todos</b> para ver egresos anteriores.</div>`;
+  if(!es.length)return h+`<div class="empty">No hay egresos en este periodo. Registra compras, pagos de luz o agua, sueldos o cualquier gasto del negocio.</div>`;
+  h+=`<div class="tablebox"><table><thead><tr><th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Pago</th><th class="r">Monto</th><th></th></tr></thead><tbody>${es.slice(0,300).map(e=>`<tr><td class="muted">${fecha(e.fecha)}</td><td>${esc(e.descripcion)}</td><td><span class="tag" style="margin:0">${esc(e.categoria)}</span></td><td>${esc(e.metodo)}</td><td class="r mono" style="color:var(--bad)">− ${money(e.monto)}</td><td class="r"><button class="btn sm danger" data-act="delEgr" data-v="${e.id}">Eliminar</button></td></tr>`).join('')}</tbody></table></div>`;
+  return h;
+}
 /* ---------- modales ---------- */
 function receipt(v){
   const N=neg(); const grav=v.total/1.18;
@@ -571,6 +648,46 @@ function modalView(){
     b=`<h2>¿Cancelar el pedido de ${esc(MESAS.find(x=>x.id===M.mid).n)}?</h2><p class="muted" style="margin:0">Se quitan los ${n} producto${n===1?'':'s'} y la mesa queda libre. No se descuenta nada del stock.${m.ventaPendiente?' La boleta emitida queda anulada.':''}</p>
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, volver</button><button class="btn danger" style="flex:1" data-act="okCancelarPed">Sí, cancelar pedido</button></div>`}
   if(M.k==='restaurar'){const d=M.datos;b=`<h2>¿Restaurar este respaldo?</h2><p class="muted" style="margin:0">${M.fecha?'Respaldo del '+fecha(M.fecha)+'. ':''}Tiene ${Object.keys(d.productos||{}).length} productos y ${Object.keys(d.ventas||{}).length} boletas. Reemplaza todo lo que hay ahora en este equipo.</p><div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Cancelar</button><button class="btn primary" style="flex:1" data-act="okRestaurar">Restaurar</button></div>`}
+  if(M.k==='ins'){const f=M.f;
+    b=`<h2>${M.id?'Editar insumo':'Nuevo insumo'}</h2>
+    <div class="field"><label for="if-nombre">Nombre</label><input class="in" id="if-nombre" data-mf="nombre" value="${esc(f.nombre)}" placeholder="Ej. Azúcar, vasos 12 oz, balón de gas"></div>
+    <div class="field"><label>Unidad</label><div class="seg">${UNIDADES.map(u=>`<button data-act="iunid" data-v="${u}" aria-pressed="${f.unidad===u}">${u}</button>`).join('')}</div></div>
+    <div class="grid2"><div class="field"><label for="if-cant">Cantidad que tienes (${esc(f.unidad)})</label><input class="in mono" id="if-cant" type="number" min="0" step="any" inputmode="decimal" data-mf="cantidad" value="${esc(f.cantidad)}"></div>
+    <div class="field"><label for="if-min">Avisarme cuando queden</label><input class="in mono" id="if-min" type="number" min="0" step="any" inputmode="decimal" data-mf="minimo" value="${esc(f.minimo)}"></div></div>
+    ${M.borrar?`<div class="banner bad"><span>¿Borrar ${esc(f.nombre)}? No se puede deshacer.</span><button class="btn sm danger" data-act="okBorrarIns">Sí, borrar</button></div>`:''}
+    <div class="row">${M.id&&!M.borrar?`<button class="btn danger" data-act="borrarIns">Borrar</button>`:''}<span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okIns">Guardar</button></div>`}
+  if(M.k==='insMov'){const i=S.insumos[M.id];if(!i)return'';const usar=M.tipo==='usar';const q=Number(M.f.cant)||0;const tiene=Number(i.cantidad)||0;const queda=usar?Math.max(0,tiene-q):tiene+q;
+    b=`<h2>${usar?'Usar':'Reponer'} ${esc(i.nombre)}</h2><p class="muted" style="margin:0">Tienes <b class="mono">${fmtCant(tiene,i.unidad)}</b>. Te avisa cuando queden ${fmtCant(i.minimo,i.unidad)}.</p>
+    <div class="field"><label for="im-cant">${usar?'Cantidad que usaste':'Cantidad que compraste'} (${esc(i.unidad)})</label><input class="in mono" id="im-cant" type="number" min="0" step="any" inputmode="decimal" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
+    ${q>0?`<p class="muted" style="margin:0">Quedarás con <b class="mono">${fmtCant(queda,i.unidad)}</b>${usar&&q>tiene?'. Estás usando más de lo registrado; quedará en 0':''}.</p>`:''}
+    ${usar?'':`<div class="field"><label for="im-costo">¿Cuánto pagaste? (S/, opcional)</label><input class="in mono" id="im-costo" type="number" min="0" step="0.10" inputmode="decimal" data-mf="costo" value="${esc(M.f.costo)}" data-live placeholder="0.00"></div>
+    ${Number(M.f.costo)>0?`<div class="field"><label>Pagado con</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${M.f.metodo===x}">${x}</button>`).join('')}</div></div><p class="note" style="text-align:left;margin:0">Se registra también como egreso en la categoría Insumos.</p>`:''}`}
+    <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okInsMov" ${q>0?'':'disabled'}>${usar?'Descontar':'Agregar'}</button></div>`}
+  if(M.k==='egr'){const f=M.f;
+    b=`<h2>Registrar egreso</h2>
+    <div class="field"><label for="ef-desc">¿En qué se gastó?</label><input class="in" id="ef-desc" data-mf="descripcion" value="${esc(f.descripcion)}" placeholder="Ej. Pago de luz, compra de pan, sueldo"></div>
+    <div class="field"><label for="ef-monto">Monto (S/)</label><input class="in mono" id="ef-monto" type="number" min="0" step="0.10" inputmode="decimal" data-mf="monto" value="${esc(f.monto)}" placeholder="0.00" style="font-size:20px;padding:12px"></div>
+    <div class="field"><label>Categoría</label><div class="chips">${EGCATS.map(c=>`<button class="chip" data-act="ecat" data-v="${c}" aria-pressed="${f.categoria===c}">${c}</button>`).join('')}</div></div>
+    <div class="field"><label>Pagado con</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${f.metodo===x}">${x}</button>`).join('')}</div></div>
+    ${f.metodo==='Efectivo'?`<p class="note" style="text-align:left;margin:0">${caja().abierta?'Se descuenta del efectivo esperado en la caja abierta.':'La caja está cerrada: el egreso se registra, pero no entra en ningún cierre.'}</p>`:''}
+    <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okEgr">Registrar egreso</button></div>`}
+  if(M.k==='delEgr'){const e=S.egresos[M.id];if(!e)return'';const cerrada=e.cajaId&&S.cajas[e.cajaId];
+    b=`<h2>¿Eliminar este egreso?</h2>
+    <div class="banner bad"><span><b>Atención:</b> esta acción no se puede deshacer. El gasto deja de restarse en egresos y en la caja.</span></div>
+    <div class="mini-list"><div><span>Descripción</span><span style="text-align:right">${esc(e.descripcion)}</span></div><div><span>Fecha</span><span>${fecha(e.fecha)}</span></div><div><span>Pago</span><span>${esc(e.metodo)}</span></div><div><span>Monto</span><span class="mono"><b>${money(e.monto)}</b></span></div></div>
+    ${cerrada?`<p class="muted" style="margin:0">Este egreso es de una caja ya cerrada. El resumen guardado de ese cierre no cambia.</p>`:''}
+    ${e.categoria==='Insumos'?`<p class="muted" style="margin:0">La cantidad de insumos no cambia. Si hace falta, corrígela en Insumos.</p>`:''}
+    <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, conservar</button><button class="btn danger" style="flex:1;background:var(--bad);color:#fff;border-color:var(--bad)" data-act="okDelEgr">Sí, eliminar</button></div>`}
+  if(M.k==='delVenta'){const v=S.ventas[M.id];if(!v)return'';
+    const cont=v.items.filter(i=>{const p=S.productos[i.pid];return p&&!p.ilimitado}).reduce((a,i)=>a+i.cant,0);
+    const cerrada=v.cajaId&&S.cajas[v.cajaId];
+    b=`<h2>¿Eliminar la boleta ${numBoleta(v)}?</h2>
+    <div class="banner bad"><span><b>Atención:</b> esta acción no se puede deshacer. La venta desaparece del registro y deja de sumar en los totales de ventas y de caja.</span></div>
+    <div class="mini-list"><div><span>Fecha</span><span>${fecha(v.fecha)}</span></div><div><span>Mesa</span><span>${esc(v.mesa)}</span></div><div><span>Estado</span><span>${v.estado==='pagada'?'Pagada'+(v.metodo?' · '+esc(v.metodo):''):v.estado==='pendiente'?'Pendiente de pago':'Anulada'}</span></div><div><span>Total</span><span class="mono"><b>${money(v.total)}</b></span></div></div>
+    ${v.estado==='pagada'&&cont?`<label class="check"><input type="checkbox" id="dv-repone" data-mfc="repone" ${M.f.repone?'checked':''}><span><b>Devolver los productos al stock</b><br><span class="muted" style="font-size:13px">Suma de nuevo ${cont} unidad${cont===1?'':'es'} al inventario. Desmárcalo si los productos sí salieron.</span></span></label>`:''}
+    ${v.estado==='pendiente'?`<p class="muted" style="margin:0">El pedido sigue en ${esc(v.mesa)} para que lo cobres de nuevo o lo canceles.</p>`:''}
+    ${cerrada?`<p class="muted" style="margin:0">Esta venta es de una caja ya cerrada. El resumen guardado de ese cierre no cambia.</p>`:''}
+    <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, conservar</button><button class="btn danger" style="flex:1;background:var(--bad);color:#fff;border-color:var(--bad)" data-act="okDelVenta">Sí, eliminar</button></div>`}
   if(M.k==='anular'){const v=S.ventas[M.id];if(!v)return'';b=`<h2>¿Modificar el pedido de ${esc(v.mesa)}?</h2><p class="muted" style="margin:0">La boleta ${numBoleta(v)} queda anulada y el pedido vuelve a ${esc(v.mesa)} para que agregues o quites productos. Al completarlo se emite una boleta nueva.</p><div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Volver</button><button class="btn danger" style="flex:1" data-act="okAnular" data-v="${M.id}">Anular boleta y modificar</button></div>`}
   if(M.k==='prod'){const f=M.f;const cats=[...new Set(prods().map(p=>p.categoria))];
     b=`<h2>${M.id?'Editar producto':'Nuevo producto'}</h2>
@@ -587,16 +704,16 @@ function modalView(){
     <div class="field"><label for="rep">Cantidad que ingresa</label><input class="in mono" id="rep" type="number" min="1" step="1" inputmode="numeric" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
     ${Number(M.f.cant)>0?`<p class="muted" style="margin:0">Quedarás con <b class="mono">${(Number(p.stock)||0)+Math.floor(Number(M.f.cant))}</b>.</p>`:''}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okReponer" ${Number(M.f.cant)>0?'':'disabled'}>Agregar al stock</button></div>`}
-  if(M.k==='cerrar'){const c=caja();const r=resumenCaja(c.id);const esp=c.apertura+r.por.Efectivo;const ct=M.f.contado;const d=Math.round(((Number(ct)||0)-esp)*100)/100;wide='wide';
+  if(M.k==='cerrar'){const c=caja();const r=resumenCaja(c.id);const esp=c.apertura+r.por.Efectivo-r.egEfe;const ct=M.f.contado;const d=Math.round(((Number(ct)||0)-esp)*100)/100;wide='wide';
     b=`<h2>Cerrar caja</h2>
-    <div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat hero"><span class="lbl">Vendido</span><b>${money(r.cobrado)}</b></div><div class="stat"><span class="lbl">Efectivo esperado</span><b>${money(esp)}</b></div></div>
-    <div class="muted" style="font-size:13.5px">${money(c.apertura)} inicial + ${money(r.por.Efectivo)} en efectivo · ${METODOS.filter(m=>m!=='Efectivo'&&r.por[m]).map(m=>`${m} ${money(r.por[m])}`).join(' · ')||'sin pagos digitales'}</div>
+    <div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat hero"><span class="lbl">Vendido</span><b>${money(r.cobrado)}</b>${r.eg?`<span style="font-size:13px;opacity:.85">Ganancia ${money(r.cobrado-r.eg)}</span>`:''}</div><div class="stat"><span class="lbl">Efectivo esperado</span><b>${money(esp)}</b></div></div>
+    <div class="muted" style="font-size:13.5px">${money(c.apertura)} inicial + ${money(r.por.Efectivo)} en ventas en efectivo${r.egEfe?` − ${money(r.egEfe)} de egresos en efectivo`:''} · ${METODOS.filter(m=>m!=='Efectivo'&&r.por[m]).map(m=>`${m} ${money(r.por[m])}`).join(' · ')||'sin pagos digitales'}</div>
     ${r.pend.length?`<div class="banner warn">Quedan ${r.pend.length} boleta${r.pend.length===1?'':'s'} sin cobrar. No se suman al cierre.</div>`:''}
     <div class="field"><label for="contado">Efectivo que contaste en caja (S/)</label><input class="in mono" id="contado" type="number" min="0" step="0.10" inputmode="decimal" data-mf="contado" value="${esc(ct)}" data-live placeholder="${esp.toFixed(2)}"></div>
     ${ct!==''?`<div class="diff ${d===0?'ok':d>0?'warn':'bad'}"><span>${d===0?'La caja cuadra':d>0?'Sobra':'Falta'}</span><span class="mono">${money(Math.abs(d))}</span></div>`:''}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okCerrar" ${ct===''?'disabled':''}>Cerrar caja</button></div>`}
-  if(M.k==='alertas'){const al=alertas();
-    b=`<h2>Productos por reponer</h2>${al.length?`<div class="lines">${al.map(p=>`<div class="line" style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(p.nombre)}<br><span class="muted" style="font-weight:400;font-size:13px">${p.ilimitado?'Stock ilimitado · marcado como agotado':`Quedan ${p.stock} · aviso en ${p.minimo}`}</span></span><span style="grid-column:2;grid-row:1" class="row">${nivel(p)==='out'?'<span class="pill bad">Agotado</span>':'<span class="pill warn">Por acabarse</span>'}${p.ilimitado?`<button class="btn sm" data-act="hayOtra" data-v="${p.id}">Ya hay</button>`:`<button class="btn sm" data-act="reponer" data-v="${p.id}">Reponer</button>`}</span></div>`).join('')}</div>`:'<div class="empty">Todo tu stock está bien.</div>'}<button class="btn" data-act="cerrarModal">Cerrar</button>`}
+  if(M.k==='alertas'){const al=alertas(),ai=alertasIns();
+    b=`<h2>Por reponer</h2><h3>Productos</h3>${al.length?`<div class="lines">${al.map(p=>`<div class="line" style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(p.nombre)}<br><span class="muted" style="font-weight:400;font-size:13px">${p.ilimitado?'Stock ilimitado · marcado como agotado':`Quedan ${p.stock} · aviso en ${p.minimo}`}</span></span><span style="grid-column:2;grid-row:1" class="row">${nivel(p)==='out'?'<span class="pill bad">Agotado</span>':'<span class="pill warn">Por acabarse</span>'}${p.ilimitado?`<button class="btn sm" data-act="hayOtra" data-v="${p.id}">Ya hay</button>`:`<button class="btn sm" data-act="reponer" data-v="${p.id}">Reponer</button>`}</span></div>`).join('')}</div>`:'<div class="empty">Productos al día.</div>'}<h3>Insumos</h3>${ai.length?`<div class="lines">${ai.map(i=>`<div class="line" style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(i.nombre)}<br><span class="muted" style="font-weight:400;font-size:13px">Quedan ${fmtCant(i.cantidad,i.unidad)} · aviso en ${fmtCant(i.minimo,i.unidad)}</span></span><span style="grid-column:2;grid-row:1" class="row">${nivelIns(i)==='out'?'<span class="pill bad">Agotado</span>':'<span class="pill warn">Por acabarse</span>'}<button class="btn sm" data-act="insRep" data-v="${i.id}">Reponer</button></span></div>`).join('')}</div>`:'<div class="empty">Insumos al día.</div>'}<button class="btn" data-act="cerrarModal">Cerrar</button>`}
   return `<div class="ov" data-act="ov"><div class="modal ${wide}" role="dialog" aria-modal="true">${b}</div></div>`;
 }
 
@@ -649,6 +766,24 @@ document.addEventListener('click',ev=>{
     case'alertas':ui.modal={k:'alertas'};break;
     case'copiar':{const t=receiptText(S.ventas[v]);try{navigator.clipboard.writeText(t).then(()=>toast('Boleta copiada.'),()=>toast('No se pudo copiar en este navegador.','warn'))}catch(_){toast('No se pudo copiar en este navegador.','warn')}return}
     case'cerrarModal':ui.modal=null;break;
+    case'ef':ui.ef=v;break;
+    case'nuevoIns':ui.modal={k:'ins',id:null,f:{nombre:'',unidad:'unid.',cantidad:'',minimo:''}};break;
+    case'editIns':{const i=S.insumos[v];ui.modal={k:'ins',id:v,f:{nombre:i.nombre,unidad:i.unidad,cantidad:String(i.cantidad),minimo:String(i.minimo)}};break}
+    case'iunid':ui.modal.f.unidad=v;break;
+    case'okIns':guardarIns();return;
+    case'borrarIns':ui.modal.borrar=true;break;
+    case'okBorrarIns':{const n=S.insumos[ui.modal.id]?.nombre;put('insumos',ui.modal.id,null);ui.modal=null;toast(`${n} borrado.`);break}
+    case'insUsar':ui.modal={k:'insMov',id:v,tipo:'usar',f:{cant:'',costo:'',metodo:'Efectivo'}};break;
+    case'insRep':ui.modal={k:'insMov',id:v,tipo:'reponer',f:{cant:'',costo:'',metodo:'Efectivo'}};break;
+    case'okInsMov':movIns();return;
+    case'insQ':{const i=S.insumos[v];if(!i)break;const antes=nivelIns(i);const ni={...clone(i),cantidad:r3(Math.max(0,(Number(i.cantidad)||0)+Number(b.dataset.d)))};put('insumos',v,ni);avisoIns(antes,ni);break}
+    case'nuevoEgr':ui.modal={k:'egr',f:{descripcion:'',monto:'',categoria:'Insumos',metodo:'Efectivo'}};break;
+    case'ecat':ui.modal.f.categoria=v;break;
+    case'okEgr':guardarEgr();return;
+    case'delEgr':ui.modal={k:'delEgr',id:v};break;
+    case'okDelEgr':{const e=S.egresos[ui.modal.id];put('egresos',ui.modal.id,null);ui.modal=null;toast(`Egreso de ${money(e.monto)} eliminado.`);break}
+    case'delVenta':ui.modal={k:'delVenta',id:v,f:{repone:true}};break;
+    case'okDelVenta':eliminarVenta(ui.modal.id,ui.modal.f.repone);return;
     case'hayOtra':{const p=S.productos[v];put('productos',v,{...clone(p),agotado:false});toast(`${p.nombre} disponible otra vez.`);break}
     case'respaldo':descargarRespaldo();return;
     case'okRestaurar':{const d=ui.modal.datos;COLS.forEach(c=>S[c]=d[c]||{});saveLocal();ui.modal=null;toast('Respaldo restaurado.');break}
