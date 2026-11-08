@@ -322,7 +322,7 @@ const FIREBASE_CONFIG={
 /* ---------- tarjeta de fidelidad (Firebase) ---------- */
 const FQ=LS+'.fidCola';
 let fb={auth:null,db:null,user:null,ok:false,enviando:false};
-try{firebase.initializeApp(FIREBASE_CONFIG);fb.auth=firebase.auth();fb.db=firebase.firestore();fb.ok=true}catch(e){console.error(e)}
+try{firebase.initializeApp(FIREBASE_CONFIG);fb.auth=firebase.auth();fb.db=firebase.firestore();fb.db.settings({ignoreUndefinedProperties:true,merge:true});fb.db.enablePersistence({synchronizeTabs:true}).catch(()=>{});fb.ok=true}catch(e){console.error(e)}
 function colaFid(){try{return JSON.parse(localStorage.getItem(FQ)||'[]')}catch(e){return[]}}
 function guardarCola(q){try{localStorage.setItem(FQ,JSON.stringify(q))}catch(e){}}
 function encolar(op){const q=colaFid();q.push(op);guardarCola(q);enviarFid()}
@@ -341,8 +341,40 @@ async function enviarFid(){
   }catch(e){console.error(e);toast('No se pudieron enviar los códigos de fidelidad. Se reintentará solo.','warn')}
   fb.enviando=false;render();
 }
+/* ---------- sincronización entre equipos ---------- */
+let subs=[];
+const DIAS_VENTAS=30;
+function desconectarDB(){subs.forEach(f=>{try{f()}catch(e){}});subs=[];if(mode==='db'){mode='local';db=null;loadLocal();note=''}}
+async function conectarDB(){
+  try{
+    note='Conectando con los demás equipos…';render();
+    const snaps=await Promise.all(COLS.map(c=>fb.db.collection(c).limit(1).get()));
+    const vacia=snaps.every(x=>x.empty);
+    const locales=Object.keys(S.ventas).length+Object.keys(S.productos).filter(k=>!S.productos[k].ejemplo).length;
+    if(vacia&&locales){note='';ui.modal={k:'migrar'};render();return}
+    escuchar();
+  }catch(e){console.error(e);note='';toast('No se pudo conectar con los demás equipos. Revisa las reglas de Firebase y tu internet. ('+(e.code||e.message)+')','bad');render()}
+}
+function escuchar(){
+  desconectarDB(); db=fb.db; mode='db'; note='';
+  const desde=new Date(Date.now()-DIAS_VENTAS*864e5).toISOString();
+  COLS.forEach(c=>{
+    let q=db.collection(c); if(c==='ventas')q=q.where('fecha','>=',desde);
+    subs.push(q.onSnapshot(snap=>{const o={};snap.forEach(d=>o[d.id]=d.data());S[c]=o;saveLocal();render()},
+      e=>{console.error(e);toast('Se perdió la sincronización de '+c+'. ('+(e.code||e.message)+')','bad')}));
+  });
+  render();
+}
+async function migrar(){
+  ui.modal=null;note='Subiendo los datos de este equipo…';render();
+  try{
+    const ops=[];COLS.forEach(c=>Object.entries(S[c]).forEach(([id,d])=>ops.push([c,id,d])));
+    for(let i=0;i<ops.length;i+=400){const b=fb.db.batch();ops.slice(i,i+400).forEach(([c,id,d])=>b.set(fb.db.collection(c).doc(id),d));await b.commit()}
+    toast('Datos subidos. Ya puedes abrir la caja en otro equipo.');escuchar();
+  }catch(e){console.error(e);note='';toast('No se pudieron subir los datos. ('+(e.code||e.message)+')','bad');render()}
+}
 if(fb.ok){
-  fb.auth.onAuthStateChanged(u=>{fb.user=u;if(u)enviarFid();if(typeof render==='function'&&$('app'))render()});
+  fb.auth.onAuthStateChanged(u=>{fb.user=u;if(u){enviarFid();conectarDB()}else desconectarDB();if(typeof render==='function'&&$('app'))render()});
   window.addEventListener('online',enviarFid);
   setInterval(enviarFid,60000);
 }
@@ -351,7 +383,17 @@ async function entrarFid(){
   if(!em||!pw){toast('Escribe el correo y la contraseña del cajero.','warn');return}
   try{await fb.auth.signInWithEmailAndPassword(em,pw);ui.fidPass='';toast('Sesión iniciada. Los códigos ya se registran.');
     const N=neg();if(/^\d{4}$/.test(N.pin||''))encolar({t:'pin',pin:N.pin});}
-  catch(e){toast(e.code==='auth/network-request-failed'?'Sin conexión. Revisa tu internet.':'Correo o contraseña incorrectos.','bad')}
+  catch(e){console.error(e);const M={
+    'auth/network-request-failed':'Sin conexión. Revisa tu internet.',
+    'auth/invalid-credential':'Correo o contraseña incorrectos, o ese usuario no existe en Firebase → Authentication → Usuarios.',
+    'auth/wrong-password':'Contraseña incorrecta.',
+    'auth/user-not-found':'Ese correo no está creado en Firebase → Authentication → Usuarios.',
+    'auth/invalid-email':'El correo no está bien escrito.',
+    'auth/operation-not-allowed':'Falta activar Correo electrónico/contraseña en Firebase → Authentication → Método de acceso.',
+    'auth/configuration-not-found':'Falta pulsar Comenzar en Firebase → Authentication y activar Correo electrónico/contraseña.',
+    'auth/unauthorized-domain':'Falta agregar cosmico-sudp.github.io en Authentication → Configuración → Dominios autorizados.',
+    'auth/too-many-requests':'Demasiados intentos. Espera unos minutos y vuelve a intentar.'};
+    toast((M[e.code]||'No se pudo iniciar sesión.')+' ('+(e.code||e.message)+')','bad')}
 }
 const numBoleta=v=>v.serie+'-'+String(v.numero).padStart(8,'0');
 function resumenCaja(cid){
@@ -500,6 +542,7 @@ function topView(){
   return `<div class="brand"><span class="logo">${ICON.logo}</span><div><b>${esc(neg().nombre)}</b><small>Caja virtual</small></div></div>
   <nav class="tabs" aria-label="Secciones">${tabs.map(([k,l])=>`<button class="tab" data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':''}>${l}</button>`).join('')}</nav>
   <div class="status">
+    ${fb.ok?`<button class="pill ${mode==='db'?'ok':'neutral'}" data-act="tab" data-v="caja">${mode==='db'?'Sincronizado':'Solo este equipo'}</button>`:''}
     <button class="pill ${c.abierta?'ok':'neutral'}" data-act="tab" data-v="caja">${c.abierta?'Caja abierta · '+hora(c.abiertaEn):'Caja cerrada'}</button>
     ${al.length?`<button class="pill ${alertas().some(p=>nivel(p)==='out')||alertasIns().some(i=>nivelIns(i)==='out')?'bad':'warn'}" data-act="alertas">${ICON.bell} ${al.length} por reponer</button>`:''}
   </div>`;
@@ -508,6 +551,7 @@ function view(){
   let h='';
   if(note)h+=`<div class="banner info">${esc(note)}</div>`;
   if(mode==='loading')return h+`<div class="empty">Cargando tu caja…</div>`;
+  if(fb.ok&&!fb.user&&ui.tab!=='caja')h+=`<div class="banner warn"><span>Este equipo trabaja solo. Inicia sesión para que los pedidos lleguen a los demás equipos.</span><button class="btn sm" data-act="tab" data-v="caja">Iniciar sesión</button></div>`;
   if(ui.tab==='mesas')h+=vMesas();
   if(ui.tab==='productos')h+=vProductos();
   if(ui.tab==='ventas')h+=vVentas();
@@ -716,6 +760,7 @@ function modalView(){
   if(M.k==='cancelarPed'){const m=S.mesas[M.mid]||{items:[]};const n=(m.items||[]).reduce((a,i)=>a+i.cant,0);
     b=`<h2>¿Cancelar el pedido de ${esc(MESAS.find(x=>x.id===M.mid).n)}?</h2><p class="muted" style="margin:0">Se quitan los ${n} producto${n===1?'':'s'} y la mesa queda libre. No se descuenta nada del stock.${m.ventaPendiente?' La boleta emitida queda anulada.':''}</p>
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, volver</button><button class="btn danger" style="flex:1" data-act="okCancelarPed">Sí, cancelar pedido</button></div>`}
+  if(M.k==='migrar'){b=`<h2>¿Subir los datos de este equipo?</h2><p class="muted" style="margin:0">La base de datos compartida está vacía. Este equipo tiene ${Object.keys(S.productos).length} productos y ${Object.keys(S.ventas).length} boletas. Súbelos desde la computadora de la caja, que es la que tiene los datos reales; en los demás equipos elige “Empezar vacío” solo si quieres borrar lo de este equipo.</p><div class="row"><button class="btn" style="flex:1" data-act="okVacio">Empezar vacío</button><button class="btn primary" style="flex:1" data-act="okMigrar">Subir datos</button></div>`}
   if(M.k==='restaurar'){const d=M.datos;b=`<h2>¿Restaurar este respaldo?</h2><p class="muted" style="margin:0">${M.fecha?'Respaldo del '+fecha(M.fecha)+'. ':''}Tiene ${Object.keys(d.productos||{}).length} productos y ${Object.keys(d.ventas||{}).length} boletas. Reemplaza todo lo que hay ahora en este equipo.</p><div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Cancelar</button><button class="btn primary" style="flex:1" data-act="okRestaurar">Restaurar</button></div>`}
   if(M.k==='ins'){const f=M.f;
     b=`<h2>${M.id?'Editar insumo':'Nuevo insumo'}</h2>
@@ -836,6 +881,8 @@ document.addEventListener('click',ev=>{
     case'copiar':{const t=receiptText(S.ventas[v]);try{navigator.clipboard.writeText(t).then(()=>toast('Boleta copiada.'),()=>toast('No se pudo copiar en este navegador.','warn'))}catch(_){toast('No se pudo copiar en este navegador.','warn')}return}
     case'cerrarModal':ui.modal=null;break;
     case'verPin':ui.verPin=!ui.verPin;break;
+    case'okMigrar':migrar();return;
+    case'okVacio':ui.modal=null;escuchar();return;
     case'entrarFid':entrarFid();return;
     case'salirFid':fb.auth.signOut();toast('Sesión cerrada.');return;
     case'ef':ui.ef=v;break;
@@ -858,7 +905,7 @@ document.addEventListener('click',ev=>{
     case'okDelVenta':eliminarVenta(ui.modal.id,ui.modal.f.repone);return;
     case'hayOtra':{const p=S.productos[v];put('productos',v,{...clone(p),agotado:false});toast(`${p.nombre} disponible otra vez.`);break}
     case'respaldo':descargarRespaldo();return;
-    case'okRestaurar':{const d=ui.modal.datos;COLS.forEach(c=>S[c]=d[c]||{});saveLocal();ui.modal=null;toast('Respaldo restaurado.');break}
+    case'okRestaurar':{const d=ui.modal.datos;if(mode==='db'){COLS.forEach(c=>{const n=d[c]||{};Object.keys(S[c]).forEach(id=>{if(!(id in n))put(c,id,null)});Object.entries(n).forEach(([id,x])=>put(c,id,x))})}else{COLS.forEach(c=>S[c]=d[c]||{});saveLocal()}ui.modal=null;toast('Respaldo restaurado.');break}
   }
   render();
 });
