@@ -864,6 +864,7 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('input',ev=>{
   const t=ev.target;
+  if(t.dataset.in==='fidEmail'||t.dataset.in==='fidPass'){ui[t.dataset.in]=t.value;return}
   if(t.dataset.in){ui[t.dataset.in]=t.value;render();return}
   if(t.dataset.mfc&&ui.modal){ui.modal.f[t.dataset.mfc]=t.checked;render();return}
   if(t.dataset.mf&&ui.modal){ui.modal.f[t.dataset.mf]=t.value;if(t.dataset.live!==undefined)render();return}
