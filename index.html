@@ -211,6 +211,11 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .receipt .tot{font-size:15px;font-weight:600}
 .stamp{display:inline-block;border:2px solid currentColor;padding:2px 10px;border-radius:4px;font-weight:600;letter-spacing:.1em;transform:rotate(-3deg);margin:8px 0}
 .stamp.paid{color:#1c7445} .stamp.pend{color:#975400} .stamp.void{color:#b3261e}
+.receipt .fid{border:1.5px dashed var(--paper-line);border-radius:6px;padding:8px 10px;margin-top:10px;text-align:center}
+.receipt .fid .lbl{font-size:10.5px;letter-spacing:.12em}
+.receipt .fid b{display:block;font-size:22px;letter-spacing:.28em;margin:2px 0 2px .28em}
+.pinrow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.pinrow .field{flex:1;min-width:140px}
 .receipt small{display:block;font-size:10.5px;color:#6b675c;margin-top:10px;text-align:center}
 
 .toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;flex-direction:column;gap:8px;width:min(440px,calc(100% - 32px))}
@@ -301,6 +306,8 @@ function enMesa(mid,pid){const it=(S.mesas[mid]?.items||[]).find(i=>i.pid===pid)
 function nivel(p){if(p.ilimitado)return p.agotado?'out':'ok';const s=Number(p.stock)||0;if(s<=0)return'out';if(s<=(Number(p.minimo)||0))return'low';return'ok'}
 const alertas=()=>prods().filter(p=>nivel(p)!=='ok');
 const totalMesa=m=>(m.items||[]).reduce((a,it)=>{const p=S.productos[it.pid];return a+(p?Number(p.precio):0)*it.cant},0);
+const FID_CH='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function codigoFid(){const usados=new Set(Object.values(S.ventas).map(v=>v.codigo).filter(Boolean));let c;do{c='';for(let i=0;i<6;i++)c+=FID_CH[Math.floor(Math.random()*FID_CH.length)]}while(usados.has(c));return c}
 const numBoleta=v=>v.serie+'-'+String(v.numero).padStart(8,'0');
 function resumenCaja(cid){
   const vs=ventas().filter(v=>v.cajaId===cid);
@@ -386,7 +393,7 @@ function emitir(mid,abrir=true){
   const N=neg(); const items=m.items.filter(it=>S.productos[it.pid]).map(it=>{const p=S.productos[it.pid];return{pid:it.pid,nombre:p.nombre,precio:Number(p.precio),cant:it.cant,...(it.nota?{nota:it.nota}:{})}});
   const total=Math.round(items.reduce((a,i)=>a+i.precio*i.cant,0)*100)/100;
   const id=uid();
-  const v={serie:N.serie,numero:N.siguiente,fecha:new Date().toISOString(),mesaId:mid,mesa:MESAS.find(x=>x.id===mid).n,items,total,estado:'pendiente',cajaId:c.id};
+  const v={serie:N.serie,numero:N.siguiente,fecha:new Date().toISOString(),mesaId:mid,mesa:MESAS.find(x=>x.id===mid).n,items,total,estado:'pendiente',cajaId:c.id,codigo:codigoFid()};
   put('ventas',id,v); put('config','negocio',{...N,siguiente:N.siguiente+1});
   m.ventaPendiente=id; put('mesas',mid,m);
   if(abrir){ui.modal={k:'boleta',id}; render()}
@@ -532,8 +539,8 @@ function vVentas(){
    <div class="stat"><span class="lbl">Ticket promedio</span><b>${money(pag.length?pag.reduce((a,v)=>a+v.total,0)/pag.length:0)}</b></div></div>`;
   if(ui.vf==='caja'&&!c.abierta)return h+`<div class="empty">No hay una caja abierta. Mira <b>Hoy</b> o <b>Todas</b> para ver ventas anteriores.</div>`;
   if(!vs.length)return h+`<div class="empty">Aún no hay boletas en este periodo. Se crean desde una mesa con “Emitir boleta”.</div>`;
-  h+=`<div class="tablebox"><table><thead><tr><th>Boleta</th><th>Fecha</th><th>Mesa</th><th>Productos</th><th>Pago</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>${vs.slice(0,300).map(v=>`<tr>
-   <td class="mono">${numBoleta(v)}</td><td class="muted">${fecha(v.fecha)}</td><td>${esc(v.mesa)}</td><td class="muted">${v.items.reduce((a,i)=>a+i.cant,0)}</td><td>${esc(v.metodo||'—')}</td>
+  h+=`<div class="tablebox"><table><thead><tr><th>Boleta</th><th>Fecha</th><th>Mesa</th><th>Productos</th><th>Pago</th><th>Cód. fidelidad</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>${vs.slice(0,300).map(v=>`<tr>
+   <td class="mono">${numBoleta(v)}</td><td class="muted">${fecha(v.fecha)}</td><td>${esc(v.mesa)}</td><td class="muted">${v.items.reduce((a,i)=>a+i.cant,0)}</td><td>${esc(v.metodo||'—')}</td><td class="mono">${v.codigo&&v.estado!=='anulada'?esc(v.codigo):'—'}</td>
    <td>${v.estado==='pagada'?'<span class="pill ok">Pagada</span>':v.estado==='pendiente'?'<span class="pill warn">Pendiente</span>':'<span class="pill neutral">Anulada</span>'}</td>
    <td class="r mono">${money(v.total)}</td><td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${v.estado==='pendiente'?`<button class="btn sm primary" data-act="pagar" data-v="${v.id}">Cobrar</button>`:''}<button class="btn sm" data-act="boleta" data-v="${v.id}">Ver</button><button class="btn sm danger" data-act="delVenta" data-v="${v.id}">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`;
   return h;
@@ -568,6 +575,11 @@ function vCaja(){
    <div class="field"><label for="neg-dir">Dirección</label><input class="in" id="neg-dir" data-neg="direccion" value="${esc(N.direccion)}"></div>
    <div class="field"><label for="neg-serie">Serie de boleta</label><input class="in mono" id="neg-serie" data-neg="serie" value="${esc(N.serie)}"></div></div>
    <p class="note" style="text-align:left;margin:0">Próxima boleta: <span class="mono">${esc(N.serie)}-${String(N.siguiente).padStart(8,'0')}</span></p></section>`;
+  h+=`<section class="panel" style="max-width:640px"><h3>Tarjeta de fidelidad</h3><p class="muted" style="margin:0">Cada boleta lleva un código único de 6 caracteres. El cliente lo ingresa en su tarjeta y suma un sello. Con 10 sellos elige un producto gratis, y para entregarlo el cajero escribe este PIN en el celular del cliente.</p>
+   ${/^\d{4}$/.test(N.pin||'')?'':'<div class="banner warn"><span>Todavía no hay PIN. Sin él no se pueden confirmar canjes.</span></div>'}
+   <div class="pinrow"><div class="field"><label for="neg-pin">PIN del cajero (4 números)</label><input class="in mono" id="neg-pin" data-neg="pin" type="${ui.verPin?'text':'password'}" value="${esc(N.pin||'')}" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="letter-spacing:.3em"></div>
+   <button class="btn" data-act="verPin">${ui.verPin?'Ocultar':'Mostrar'}</button></div>
+   <p class="note" style="text-align:left;margin:0">Cámbialo si alguien que no es del equipo llega a verlo.</p></section>`;
   return h;
 }
 
@@ -610,11 +622,12 @@ function receipt(v){
   <div class="kv tot"><span>TOTAL</span><span>${money(v.total)}</span></div>
   ${v.estado==='pagada'?`<hr><div class="kv"><span>Pago</span><span>${esc(v.metodo)}</span></div>${v.metodo==='Efectivo'?`<div class="kv"><span>Recibido</span><span>${money(v.recibido)}</span></div><div class="kv"><span>Vuelto</span><span>${money(v.vuelto)}</span></div>`:''}`:''}
   <div class="c"><span class="stamp ${v.estado==='pagada'?'paid':v.estado==='pendiente'?'pend':'void'}">${v.estado==='pagada'?'PAGADO':v.estado==='pendiente'?'POR PAGAR':'ANULADA'}</span></div>
+  ${v.codigo&&v.estado!=='anulada'?`<div class="fid"><div class="lbl">TARJETA DE FIDELIDAD</div><b>${esc(v.codigo)}</b><div>Ingresa este código y suma un sello.<br>10 sellos = 1 producto gratis.</div></div>`:''}
   <small>Comprobante interno de control. No reemplaza la boleta electrónica SUNAT.</small></div>`;
 }
 function receiptText(v){
   const N=neg();
-  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:''].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
+  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:'',...(v.codigo&&v.estado!=='anulada'?['','Código de fidelidad: '+v.codigo,'Ingrésalo y suma un sello. 10 sellos = 1 producto gratis.']:[])].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
 }
 function modalView(){
   const M=ui.modal; if(!M)return'';
@@ -766,6 +779,7 @@ document.addEventListener('click',ev=>{
     case'alertas':ui.modal={k:'alertas'};break;
     case'copiar':{const t=receiptText(S.ventas[v]);try{navigator.clipboard.writeText(t).then(()=>toast('Boleta copiada.'),()=>toast('No se pudo copiar en este navegador.','warn'))}catch(_){toast('No se pudo copiar en este navegador.','warn')}return}
     case'cerrarModal':ui.modal=null;break;
+    case'verPin':ui.verPin=!ui.verPin;break;
     case'ef':ui.ef=v;break;
     case'nuevoIns':ui.modal={k:'ins',id:null,f:{nombre:'',unidad:'unid.',cantidad:'',minimo:''}};break;
     case'editIns':{const i=S.insumos[v];ui.modal={k:'ins',id:v,f:{nombre:i.nombre,unidad:i.unidad,cantidad:String(i.cantidad),minimo:String(i.minimo)}};break}
@@ -802,6 +816,7 @@ document.addEventListener('change',ev=>{
   if(t.dataset.agot){const p=S.productos[t.dataset.agot];if(p){put('productos',t.dataset.agot,{...clone(p),agotado:t.checked});render();toast(t.checked?`${p.nombre} marcado como agotado. Ya no se puede pedir.`:`${p.nombre} disponible otra vez.`,t.checked?'warn':'')}return}
   if(t.dataset.qty){setQty(ui.mesa,t.dataset.qty,t.value);return}
   if(t.dataset.nota){const m=mesa(ui.mesa);const it=m.items.find(i=>i.pid===t.dataset.nota);if(it){const n=t.value.trim();if(n)it.nota=n;else delete it.nota;put('mesas',ui.mesa,m);render()}return}
+  if(t.dataset.neg==='pin'){const val=t.value.trim();if(!/^\d{4}$/.test(val)){toast('El PIN debe tener exactamente 4 números.','bad');return}put('config','negocio',{...neg(),pin:val});render();toast('PIN del cajero guardado.');return}
   if(t.dataset.neg){const N=neg();let val=t.value.trim();if(t.dataset.neg==='serie')val=val.toUpperCase()||'B001';if(t.dataset.neg==='nombre')val=val||'Mi negocio';put('config','negocio',{...N,[t.dataset.neg]:val});render();toast('Datos del negocio guardados.')}
 });
 document.addEventListener('keydown',ev=>{
