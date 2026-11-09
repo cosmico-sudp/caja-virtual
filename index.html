@@ -51,11 +51,11 @@ button,input,select{font:inherit;color:inherit}
 .logo{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
 .brand b{font-family:var(--f-display);font-weight:800;font-size:18px;display:block;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:42vw}
 .brand small{color:var(--muted);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
-.tabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:11px;order:3;width:100%;overflow-x:auto}
-.tab{flex:1;border:0;background:transparent;padding:8px 12px;border-radius:8px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--sunk);padding:4px;border-radius:11px;order:3;width:100%}
+.tab{flex:1;border:0;background:transparent;padding:8px 6px;border-radius:8px;font-weight:600;color:var(--muted);cursor:pointer;white-space:nowrap}
 .tab[aria-current="page"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 .status{display:flex;gap:8px;margin-left:auto;align-items:center}
-@media (min-width:860px){.tabs{order:0;width:auto}.tab{flex:none}}
+@media (min-width:860px){.tabs{display:flex;order:0;width:auto}.tab{flex:none}}
 
 .pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:99px;font-size:12.5px;font-weight:600;white-space:nowrap;border:0}
 .pill::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
@@ -148,6 +148,7 @@ input.in:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(
 .vuelto.idle{background:var(--sunk);color:var(--muted)}
 .mini-list{font-size:13.5px;display:flex;flex-direction:column;gap:3px;max-height:150px;overflow:auto;padding:10px 12px;background:var(--sunk);border-radius:10px}
 .mini-list div{display:flex;justify-content:space-between;gap:10px}
+.mini-list .mono{white-space:nowrap}
 @media (max-width:860px){
   .mseg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--sunk);padding:4px;border-radius:11px}
   .mseg button{border:0;background:transparent;padding:10px;border-radius:8px;font-weight:600;color:var(--muted);cursor:pointer}
@@ -171,7 +172,8 @@ table{width:100%;border-collapse:collapse;min-width:640px}
 th{font-size:11.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);text-align:left;font-weight:600;padding:10px 12px;border-bottom:1px solid var(--line);background:var(--sunk)}
 td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
 tr:last-child td{border-bottom:0}
-td.r,th.r{text-align:right}
+td.r,th.r{text-align:right;white-space:nowrap}
+td:first-child{white-space:nowrap}
 tr.low td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
 tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .tag{font-size:11px;font-weight:600;background:var(--sunk);color:var(--muted);padding:2px 7px;border-radius:6px;margin-left:6px;letter-spacing:.03em}
@@ -193,6 +195,8 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 @media (min-width:600px){.ov{align-items:center}}
 .modal{background:var(--surface);border-radius:18px;width:100%;max-width:460px;max-height:100%;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .modal.wide{max-width:560px}
+.modal:focus{outline:none}
+.modal.xwide{max-width:760px}
 .seg{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:6px}
 .seg button{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:10px 6px;font-weight:600;cursor:pointer}
 .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
@@ -211,11 +215,6 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .receipt .tot{font-size:15px;font-weight:600}
 .stamp{display:inline-block;border:2px solid currentColor;padding:2px 10px;border-radius:4px;font-weight:600;letter-spacing:.1em;transform:rotate(-3deg);margin:8px 0}
 .stamp.paid{color:#1c7445} .stamp.pend{color:#975400} .stamp.void{color:#b3261e}
-.receipt .fid{border:1.5px dashed var(--paper-line);border-radius:6px;padding:8px 10px;margin-top:10px;text-align:center}
-.receipt .fid .lbl{font-size:10.5px;letter-spacing:.12em}
-.receipt .fid b{display:block;font-size:22px;letter-spacing:.28em;margin:2px 0 2px .28em}
-.pinrow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
-.pinrow .field{flex:1;min-width:140px}
 .receipt small{display:block;font-size:10.5px;color:#6b675c;margin-top:10px;text-align:center}
 
 .toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;flex-direction:column;gap:8px;width:min(440px,calc(100% - 32px))}
@@ -233,9 +232,6 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 <div id="modal"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 (function(){
 const COLS=['productos','mesas','ventas','cajas','config','insumos','egresos'];
@@ -249,6 +245,8 @@ let db=null, mode='loading', note='';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=n=>{const v=Math.round((Number(n)||0)*100)/100;return(v<0?'− ':'')+'S/ '+Math.abs(v).toFixed(2)};
+const num=v=>{const n=parseFloat(String(v??'').replace(/\s/g,'').replace(',','.'));return isFinite(n)?n:NaN};
+const clean=v=>String(v).replace(/[^0-9.,\-]/g,'').replace(',','.');
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const clone=o=>JSON.parse(JSON.stringify(o));
 const hora=iso=>iso?new Date(iso).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}):'';
@@ -268,7 +266,7 @@ async function flush(k,col,id){
   const q=wq[k]; q.busy=true;
   while(q.job){const j=q.job;q.job=null;const ref=db.collection(col).doc(id);
     try{ j.data===null?await ref.delete():await ref.set(j.data) }
-    catch(e){ console.error(e); toast(e&&e.code==='resource-exhausted'?'Se llegó al límite gratis de Firebase por hoy. Los cambios se guardan en este equipo.':e&&e.code==='permission-denied'?'Firebase no dejó guardar el cambio. Revisa que las reglas estén publicadas y que la sesión siga iniciada.':'No se pudo guardar el cambio. Revisa tu conexión.','bad') } }
+    catch(e){ toast(e&&e.code==='quota_exceeded'?'Se llenó el espacio de datos. Borra ventas antiguas para seguir.':'No se pudo guardar el cambio. Revisa tu conexión.','bad') } }
   q.busy=false;
 }
 async function init(){
@@ -309,99 +307,14 @@ function enMesa(mid,pid){const it=(S.mesas[mid]?.items||[]).find(i=>i.pid===pid)
 function nivel(p){if(p.ilimitado)return p.agotado?'out':'ok';const s=Number(p.stock)||0;if(s<=0)return'out';if(s<=(Number(p.minimo)||0))return'low';return'ok'}
 const alertas=()=>prods().filter(p=>nivel(p)!=='ok');
 const totalMesa=m=>(m.items||[]).reduce((a,it)=>{const p=S.productos[it.pid];return a+(p?Number(p.precio):0)*it.cant},0);
-const FID_CH='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
-function codigoFid(){const usados=new Set(Object.values(S.ventas).map(v=>v.codigo).filter(Boolean));let c;do{c='';for(let i=0;i<6;i++)c+=FID_CH[Math.floor(Math.random()*FID_CH.length)]}while(usados.has(c));return c}
-const FIREBASE_CONFIG={
-  apiKey:"AIzaSyDWDqJ2raFsNT6-7d6VfE28kyQOjv2O8h4",
-  authDomain:"tarjeta-virtual-bb6a8.firebaseapp.com",
-  projectId:"tarjeta-virtual-bb6a8",
-  storageBucket:"tarjeta-virtual-bb6a8.firebasestorage.app",
-  messagingSenderId:"95606922881",
-  appId:"1:95606922881:web:c085923a66fb579b4bf780"
-};
-/* ---------- tarjeta de fidelidad (Firebase) ---------- */
-const FQ=LS+'.fidCola';
-let fb={auth:null,db:null,user:null,ok:false,enviando:false};
-try{firebase.initializeApp(FIREBASE_CONFIG);fb.auth=firebase.auth();fb.db=firebase.firestore();fb.db.settings({ignoreUndefinedProperties:true,merge:true});fb.db.enablePersistence({synchronizeTabs:true}).catch(()=>{});fb.ok=true}catch(e){console.error(e)}
-function colaFid(){try{return JSON.parse(localStorage.getItem(FQ)||'[]')}catch(e){return[]}}
-function guardarCola(q){try{localStorage.setItem(FQ,JSON.stringify(q))}catch(e){}}
-function encolar(op){const q=colaFid();q.push(op);guardarCola(q);enviarFid()}
-async function enviarFid(){
-  if(!fb.ok||!fb.user||fb.enviando)return;
-  fb.enviando=true;
-  try{
-    let q=colaFid();
-    while(q.length){
-      const op=q[0];
-      if(op.t==='crear') await fb.db.collection('codigos').doc(op.c).set({estado:'disponible',boleta:op.b,total:op.total,creado:firebase.firestore.FieldValue.serverTimestamp()});
-      else if(op.t==='anular'){const ref=fb.db.collection('codigos').doc(op.c);await fb.db.runTransaction(async tx=>{const d=await tx.get(ref);if(d.exists&&d.data().estado==='disponible')tx.update(ref,{estado:'anulado'})})}
-      else if(op.t==='pin') await fb.db.collection('privado').doc('pin').set({pin:op.pin});
-      q=colaFid();q.shift();guardarCola(q);
-    }
-  }catch(e){console.error(e);if(navigator.onLine)toast('No se pudieron enviar los códigos de fidelidad. Se reintentará solo.','warn')}
-  fb.enviando=false;render();
-}
-/* ---------- sincronización entre equipos ---------- */
-let subs=[];
-const DIAS_VENTAS=30;
-function desconectarDB(){subs.forEach(f=>{try{f()}catch(e){}});subs=[];if(mode==='db'){mode='local';db=null;loadLocal();note=''}}
-async function conectarDB(){
-  try{
-    note='Conectando con los demás equipos…';render();
-    const snaps=await Promise.all(COLS.map(c=>fb.db.collection(c).limit(1).get()));
-    const vacia=snaps.every(x=>x.empty);
-    const locales=Object.keys(S.ventas).length+Object.keys(S.productos).filter(k=>!S.productos[k].ejemplo).length;
-    if(vacia&&locales){note='';ui.modal={k:'migrar'};render();return}
-    escuchar();
-  }catch(e){console.error(e);note='';toast('No se pudo conectar con los demás equipos. Revisa las reglas de Firebase y tu internet. ('+(e.code||e.message)+')','bad');render()}
-}
-function escuchar(){
-  desconectarDB(); db=fb.db; mode='db'; note='';
-  const desde=new Date(Date.now()-DIAS_VENTAS*864e5).toISOString();
-  COLS.forEach(c=>{
-    let q=db.collection(c); if(c==='ventas')q=q.where('fecha','>=',desde);
-    subs.push(q.onSnapshot(snap=>{const o={};snap.forEach(d=>o[d.id]=d.data());S[c]=o;saveLocal();render()},
-      e=>{console.error(e);toast('Se perdió la sincronización de '+c+'. ('+(e.code||e.message)+')','bad')}));
-  });
-  render();
-}
-async function migrar(){
-  ui.modal=null;note='Subiendo los datos de este equipo…';render();
-  try{
-    const ops=[];COLS.forEach(c=>Object.entries(S[c]).forEach(([id,d])=>ops.push([c,id,d])));
-    for(let i=0;i<ops.length;i+=400){const b=fb.db.batch();ops.slice(i,i+400).forEach(([c,id,d])=>b.set(fb.db.collection(c).doc(id),d));await b.commit()}
-    toast('Datos subidos. Ya puedes abrir la caja en otro equipo.');escuchar();
-  }catch(e){console.error(e);note='';toast('No se pudieron subir los datos. ('+(e.code||e.message)+')','bad');render()}
-}
-if(fb.ok){
-  fb.auth.onAuthStateChanged(u=>{fb.user=u;if(u){enviarFid();conectarDB()}else desconectarDB();if(typeof render==='function'&&$('app'))render()});
-  window.addEventListener('online',enviarFid);
-  setInterval(enviarFid,60000);
-}
-async function entrarFid(){
-  const em=(ui.fidEmail||'').trim(),pw=ui.fidPass||'';
-  if(!em||!pw){toast('Escribe el correo y la contraseña del cajero.','warn');return}
-  try{await fb.auth.signInWithEmailAndPassword(em,pw);ui.fidPass='';toast('Sesión iniciada. Los códigos ya se registran.');
-    const N=neg();if(/^\d{4}$/.test(N.pin||''))encolar({t:'pin',pin:N.pin});}
-  catch(e){console.error(e);const M={
-    'auth/network-request-failed':'Sin conexión. Revisa tu internet.',
-    'auth/invalid-credential':'Correo o contraseña incorrectos, o ese usuario no existe en Firebase → Authentication → Usuarios.',
-    'auth/wrong-password':'Contraseña incorrecta.',
-    'auth/user-not-found':'Ese correo no está creado en Firebase → Authentication → Usuarios.',
-    'auth/invalid-email':'El correo no está bien escrito.',
-    'auth/operation-not-allowed':'Falta activar Correo electrónico/contraseña en Firebase → Authentication → Método de acceso.',
-    'auth/configuration-not-found':'Falta pulsar Comenzar en Firebase → Authentication y activar Correo electrónico/contraseña.',
-    'auth/unauthorized-domain':'Falta agregar cosmico-sudp.github.io en Authentication → Configuración → Dominios autorizados.',
-    'auth/too-many-requests':'Demasiados intentos. Espera unos minutos y vuelve a intentar.'};
-    toast((M[e.code]||'No se pudo iniciar sesión.')+' ('+(e.code||e.message)+')','bad')}
-}
 const numBoleta=v=>v.serie+'-'+String(v.numero).padStart(8,'0');
 function resumenCaja(cid){
   const vs=ventas().filter(v=>v.cajaId===cid);
   const pag=vs.filter(v=>v.estado==='pagada');
   const por={};METODOS.forEach(m=>por[m]=0);pag.forEach(v=>por[v.metodo]=(por[v.metodo]||0)+v.total);
   const egs=Object.values(S.egresos||{}).filter(e=>e.cajaId===cid);
-  return{pagadas:pag.length,cobrado:pag.reduce((a,v)=>a+v.total,0),por,pend:vs.filter(v=>v.estado==='pendiente'),eg:egs.reduce((a,e)=>a+e.monto,0),egEfe:egs.filter(e=>e.metodo==='Efectivo').reduce((a,e)=>a+e.monto,0)};
+  const egPor={};METODOS.forEach(m=>egPor[m]=0);egs.forEach(e=>egPor[e.metodo]=(egPor[e.metodo]||0)+e.monto);
+  return{egPor,pagadas:pag.length,cobrado:pag.reduce((a,v)=>a+v.total,0),por,pend:vs.filter(v=>v.estado==='pendiente'),eg:egs.reduce((a,e)=>a+e.monto,0),egEfe:egs.filter(e=>e.metodo==='Efectivo').reduce((a,e)=>a+e.monto,0)};
 }
 
 /* ---------- acciones ---------- */
@@ -419,7 +332,7 @@ function setQty(mid,pid,n){
 }
 function completar(mid,metodo,recibido){
   if(!caja().abierta){toast('Abre la caja para cobrar.','warn');return}
-  const m=mesa(mid); if(!m.items.length&&!m.ventaPendiente){ui.modal=null;render();toast('Esta mesa ya no tiene pedido. Puede que se haya cobrado desde otro equipo.','warn');return}
+  const m=mesa(mid); if(!m.items.length&&!m.ventaPendiente)return;
   const id=m.ventaPendiente||emitir(mid,false); if(!id)return;
   confirmarPago(id,metodo,recibido);
   ui.modal={k:'boleta',id}; ui.mside='productos'; render();
@@ -430,40 +343,40 @@ function eliminarVenta(id,repone){
   if(v.estado==='pagada'&&repone){for(const it of v.items){const p=S.productos[it.pid];if(!p||p.ilimitado)continue;put('productos',it.pid,{...clone(p),stock:(Number(p.stock)||0)+it.cant});n+=it.cant}}
   const m=S.mesas[v.mesaId]; if(m&&m.ventaPendiente===id)put('mesas',v.mesaId,{...clone(m),ventaPendiente:null});
   put('ventas',id,null);
-  if(v.codigo)encolar({t:'anular',c:v.codigo});
   ui.modal=null;render();toast(`Boleta ${numBoleta(v)} eliminada.`+(n?` Se devolvieron ${n} unidad${n===1?'':'es'} al stock.`:''));
 }
 const insumos=()=>Object.entries(S.insumos||{}).map(([id,x])=>({id,...x})).sort((a,b)=>String(a.nombre).localeCompare(b.nombre));
 function nivelIns(i){const c=Number(i.cantidad)||0;if(c<=0)return'out';if(c<=(Number(i.minimo)||0))return'low';return'ok'}
 const alertasIns=()=>insumos().filter(i=>nivelIns(i)!=='ok');
 const r3=n=>Math.round(n*1000)/1000;
-const fmtCant=(n,u)=>`${Number((Number(n)||0).toFixed(3))} ${u||''}`.trim();
+const fmtCant=(n,u)=>`${Number((Number(n)||0).toFixed(3))} ${u==='unid.'?'unid':(u||'')}`.trim();
 const EGCATS=['Insumos','Servicios','Sueldos','Alquiler','Transporte','Otros'];
-const UNIDADES=['unid.','kg','g','l','ml','paquete','bolsa','caja'];
+const UNIDADES=['unid','kg','g','l','ml','paquete','bolsa','caja'];
 const egresos=()=>Object.entries(S.egresos||{}).map(([id,e])=>({id,...e})).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
 function avisoIns(antes,ni){const d=nivelIns(ni);if(d!=='ok'&&d!==antes)toast(d==='out'?`Se acabó ${ni.nombre}.`:`${ni.nombre} está por acabarse: quedan ${fmtCant(ni.cantidad,ni.unidad)}.`,d==='out'?'bad':'warn')}
 function guardarIns(){
   const f=ui.modal.f; const nombre=String(f.nombre||'').trim();
   if(!nombre){toast('Escribe el nombre del insumo.','warn');return}
   const id=ui.modal.id||uid(); const nuevo=!S.insumos[id];
-  put('insumos',id,{nombre,unidad:f.unidad||'unid.',cantidad:r3(Math.max(0,Number(f.cantidad)||0)),minimo:r3(Math.max(0,Number(f.minimo)||0))});
+  if(Object.entries(S.insumos||{}).some(([k,x])=>k!==ui.modal.id&&String(x.nombre).trim().toLowerCase()===nombre.toLowerCase())){toast(`Ya existe un insumo llamado ${nombre}.`,'warn');return}
+  put('insumos',id,{nombre,unidad:f.unidad||'unid',cantidad:r3(Math.max(0,num(f.cantidad)||0)),minimo:r3(Math.max(0,num(f.minimo)||0))});
   ui.modal=null;render();toast(nuevo?`${nombre} registrado.`:`${nombre} actualizado.`);
 }
 function registrarEgreso(e){const c=caja();put('egresos',uid(),{...e,monto:Math.round(Number(e.monto)*100)/100,fecha:new Date().toISOString(),cajaId:c.abierta?c.id:null})}
 function movIns(){
-  const M=ui.modal, i=S.insumos[M.id]; if(!i)return; const q=Number(M.f.cant);
+  const M=ui.modal, i=S.insumos[M.id]; if(!i)return; const q=num(M.f.cant);
   if(!(q>0)){toast('Escribe una cantidad mayor a cero.','warn');return}
   const antes=nivelIns(i), usar=M.tipo==='usar';
   const ni={...clone(i),cantidad:r3(Math.max(0,(Number(i.cantidad)||0)+(usar?-q:q)))};
   put('insumos',M.id,ni);
-  const costo=Number(M.f.costo);
+  const costo=num(M.f.costo);
   if(!usar&&costo>0)registrarEgreso({descripcion:`Compra: ${i.nombre} (${fmtCant(q,i.unidad)})`,categoria:'Insumos',metodo:M.f.metodo,monto:costo});
   ui.modal=null;render();
   toast(usar?`Descontado ${fmtCant(q,i.unidad)} de ${i.nombre}. Quedan ${fmtCant(ni.cantidad,i.unidad)}.`:`+${fmtCant(q,i.unidad)} de ${i.nombre}.`+(costo>0?` Egreso de ${money(costo)} registrado.`:''));
   if(usar)avisoIns(antes,ni);
 }
 function guardarEgr(){
-  const f=ui.modal.f; const d=String(f.descripcion||'').trim(); const m=Number(f.monto);
+  const f=ui.modal.f; const d=String(f.descripcion||'').trim(); const m=num(f.monto);
   if(!d){toast('Escribe en qué se gastó.','warn');return}
   if(!(m>0)){toast('Escribe un monto mayor a cero.','warn');return}
   registrarEgreso({descripcion:d,categoria:f.categoria,metodo:f.metodo,monto:m});
@@ -471,7 +384,7 @@ function guardarEgr(){
 }
 function cancelarPedido(mid){
   const m=mesa(mid);
-  if(m.ventaPendiente){const v=S.ventas[m.ventaPendiente];if(v&&v.estado==='pendiente'){put('ventas',m.ventaPendiente,{...clone(v),estado:'anulada',anuladaEn:new Date().toISOString()});if(v.codigo)encolar({t:'anular',c:v.codigo})}}
+  if(m.ventaPendiente){const v=S.ventas[m.ventaPendiente];if(v&&v.estado==='pendiente')put('ventas',m.ventaPendiente,{...clone(v),estado:'anulada',anuladaEn:new Date().toISOString()})}
   put('mesas',mid,{items:[],ventaPendiente:null,abiertaEn:null});
   ui.modal=null;ui.mside='productos';render();toast(`Pedido de ${MESAS.find(x=>x.id===mid).n} cancelado.`);
 }
@@ -481,10 +394,8 @@ function emitir(mid,abrir=true){
   const N=neg(); const items=m.items.filter(it=>S.productos[it.pid]).map(it=>{const p=S.productos[it.pid];return{pid:it.pid,nombre:p.nombre,precio:Number(p.precio),cant:it.cant,...(it.nota?{nota:it.nota}:{})}});
   const total=Math.round(items.reduce((a,i)=>a+i.precio*i.cant,0)*100)/100;
   const id=uid();
-  const v={serie:N.serie,numero:N.siguiente,fecha:new Date().toISOString(),mesaId:mid,mesa:MESAS.find(x=>x.id===mid).n,items,total,estado:'pendiente',cajaId:c.id,codigo:codigoFid()};
+  const v={serie:N.serie,numero:N.siguiente,fecha:new Date().toISOString(),mesaId:mid,mesa:MESAS.find(x=>x.id===mid).n,items,total,estado:'pendiente',cajaId:c.id};
   put('ventas',id,v); put('config','negocio',{...N,siguiente:N.siguiente+1});
-  encolar({t:'crear',c:v.codigo,b:numBoleta(v),total});
-  if(!fb.user)toast('El código de fidelidad se registrará cuando inicies sesión en Caja → Tarjeta de fidelidad.','warn');
   m.ventaPendiente=id; put('mesas',mid,m);
   if(abrir){ui.modal={k:'boleta',id}; render()}
   return id;
@@ -493,7 +404,7 @@ function confirmarPago(id,metodo,recibido){
   const v=S.ventas[id]; if(!v||v.estado!=='pendiente')return;
   if(!caja().abierta){toast('Abre la caja para registrar el pago.','warn');return}
   const nv={...clone(v),estado:'pagada',metodo,pagadaEn:new Date().toISOString(),cajaId:caja().id};
-  if(metodo==='Efectivo'){const r=Number(recibido)||v.total;nv.recibido=r;nv.vuelto=Math.max(0,Math.round((r-v.total)*100)/100)}
+  if(metodo==='Efectivo'){const r=num(recibido)||v.total;if(r<v.total){toast(`Faltan ${money(v.total-r)} para completar el pago.`,'warn');return}nv.recibido=r;nv.vuelto=Math.max(0,Math.round((r-v.total)*100)/100)}
   put('ventas',id,nv);
   const nuevos=[];
   for(const it of v.items){const p=S.productos[it.pid];if(!p||p.ilimitado)continue;const antes=nivel(p);const np={...clone(p),stock:Math.max(0,(Number(p.stock)||0)-it.cant)};put('productos',it.pid,np);const des=nivel(np);if(des!=='ok'&&antes!==des)nuevos.push(np)}
@@ -505,28 +416,57 @@ function confirmarPago(id,metodo,recibido){
 function anular(id){
   const v=S.ventas[id]; if(!v||v.estado!=='pendiente')return;
   put('ventas',id,{...clone(v),estado:'anulada',anuladaEn:new Date().toISOString()});
-  if(v.codigo)encolar({t:'anular',c:v.codigo});
   const m=S.mesas[v.mesaId]; if(m&&m.ventaPendiente===id)put('mesas',v.mesaId,{...clone(m),ventaPendiente:null});
   ui.modal=null;render();toast(`Boleta ${numBoleta(v)} anulada. El pedido sigue en ${v.mesa}.`);
 }
 function abrirCaja(){
-  const m=Number(($('apertura')||{}).value)||0;
+  const m=Math.max(0,Math.round((num(($('apertura')||{}).value)||0)*100)/100);
   put('config','caja',{abierta:true,id:uid(),apertura:m,abiertaEn:new Date().toISOString()});
   render();toast(`Caja abierta con ${money(m)}.`);
 }
-function cerrarCaja(contado){
+function filasMetodo(apertura,r){
+  return METODOS.map(m=>{const ef=m==='Efectivo';const ini=ef?apertura:0;return{m,ini,ventas:r.por[m]||0,egr:r.egPor[m]||0,esp:Math.round((ini+(r.por[m]||0)-(r.egPor[m]||0))*100)/100}});
+}
+function tablaMetodos(filas,opt={}){
+  // Solo ventas y egresos: el monto inicial NO entra aquí
+  const t=k=>filas.reduce((a,f)=>a+(f[k]||0),0);
+  const neto=f=>Math.round((f.ventas-f.egr)*100)/100;
+  const dif=f=>{const c=opt.contado&&opt.contado[f.m];if(c===undefined||c===''||c===null)return null;return Math.round((Number(c)-neto(f))*100)/100};
+  const pillDif=d=>d===null?'<span class="muted">—</span>':d===0?'<span class="pill ok">Cuadra</span>':`<span class="pill ${d>0?'warn':'bad'}">${d>0?'Sobra ':'Falta '}${money(Math.abs(d))}</span>`;
+  const extra=opt.input||opt.contado;
+  const head=`<tr><th>Método</th><th class="r">Vendido</th><th class="r">Egresos</th><th class="r">Neto</th>${extra?'<th class="r">Recibido</th><th class="r">Diferencia</th>':''}</tr>`;
+  const rows=filas.map(f=>{const dig=f.m!=='Efectivo';return `<tr><td><b>${f.m}</b></td><td class="r mono"><b>${money(f.ventas)}</b></td><td class="r mono" style="color:${f.egr?'var(--bad)':'inherit'}">${f.egr?'− '+money(f.egr):'—'}</td><td class="r mono">${money(neto(f))}</td>
+    ${extra?(dig?(opt.input?`<td class="r"><input class="in mono" style="width:104px;text-align:right;padding:6px 8px" id="ct-${f.m}" type="text" autocomplete="off" inputmode="decimal" data-ctm="${f.m}" value="${esc(opt.contado[f.m]??'')}" placeholder="${neto(f).toFixed(2)}"></td>`:`<td class="r mono">${opt.contado[f.m]!=null?money(opt.contado[f.m]):'—'}</td>`)+`<td class="r">${pillDif(dif(f))}</td>`:'<td class="r muted" style="font-size:12.5px" colspan="2">Se cuenta abajo</td>'):''}</tr>`}).join('');
+  const tot=`<tr style="background:var(--sunk)"><td><b>Total vendido</b></td><td class="r mono"><b>${money(t('ventas'))}</b></td><td class="r mono" style="color:var(--bad)">${t('egr')?'− '+money(t('egr')):'—'}</td><td class="r mono"><b>${money(t('ventas')-t('egr'))}</b></td>${extra?'<td></td><td></td>':''}</tr>`;
+  return `<div class="tablebox"><table style="min-width:${extra?600:420}px"><thead>${head}</thead><tbody>${rows}${tot}</tbody></table></div>`;
+}
+function cuadreEfectivo(ini,ven,egr,contado,input){
+  const esp=Math.round((ini+ven-egr)*100)/100; const has=contado!==undefined&&contado!==''&&contado!==null; const d=has?Math.round((Number(contado)-esp)*100)/100:null;
+  return `<div class="mini-list" style="max-height:none;font-size:14px;gap:6px">
+    <div><span>Monto inicial (con lo que abriste)</span><span class="mono">${money(ini)}</span></div>
+    <div><span>+ Vendido en efectivo</span><span class="mono">${money(ven)}</span></div>
+    ${egr?`<div><span>− Egresos pagados en efectivo</span><span class="mono" style="color:var(--bad)">− ${money(egr)}</span></div>`:''}
+    <div style="border-top:1px dashed var(--line);padding-top:6px"><b>Debe haber en caja</b><b class="mono">${money(esp)}</b></div></div>
+  ${input?`<div class="field"><label for="ct-Efectivo">Efectivo que contaste en caja (S/)</label><input class="in mono" id="ct-Efectivo" type="text" autocomplete="off" inputmode="decimal" data-ctm="Efectivo" value="${esc(contado??'')}" placeholder="${esp.toFixed(2)}" style="font-size:18px;padding:11px"></div>`:has?`<div class="mini-list"><div><span>Efectivo contado</span><span class="mono">${money(contado)}</span></div></div>`:''}
+  ${has?`<div class="diff ${d===0?'ok':d>0?'warn':'bad'}"><span>${d===0?'El efectivo cuadra':d>0?'Sobra en efectivo':'Falta en efectivo'}</span><span class="mono">${money(Math.abs(d))}</span></div>`:''}`;
+}
+function cerrarCaja(cts){
   const c=caja(); if(!c.abierta)return; const r=resumenCaja(c.id);
-  const esperado=c.apertura+r.por.Efectivo-r.egEfe; const ct=Number(contado)||0;
-  put('cajas',c.id,{apertura:c.apertura,abiertaEn:c.abiertaEn,cerradaEn:new Date().toISOString(),boletas:r.pagadas,cobrado:r.cobrado,porMetodo:r.por,egresos:r.eg,egresosEfectivo:r.egEfe,ganancia:Math.round((r.cobrado-r.eg)*100)/100,esperado,contado:ct,diferencia:Math.round((ct-esperado)*100)/100});
+  const filas=filasMetodo(c.apertura,r); const contadoPor={},diferenciaPor={},esperadoPor={};
+  filas.forEach(f=>{const e=f.m==='Efectivo'?f.esp:Math.round((f.ventas-f.egr)*100)/100;esperadoPor[f.m]=e;const v=cts[f.m];contadoPor[f.m]=(v===undefined||v===''||isNaN(num(v)))?e:Math.round(num(v)*100)/100;diferenciaPor[f.m]=Math.round((contadoPor[f.m]-e)*100)/100});
+  const esperado=esperadoPor.Efectivo, ct=contadoPor.Efectivo;
+  const difTotal=Math.round(Object.values(diferenciaPor).reduce((a,x)=>a+x,0)*100)/100;
+  put('cajas',c.id,{egresosPor:r.egPor,esperadoPor,contadoPor,diferenciaPor,diferenciaTotal:difTotal,apertura:c.apertura,abiertaEn:c.abiertaEn,cerradaEn:new Date().toISOString(),boletas:r.pagadas,cobrado:r.cobrado,porMetodo:r.por,egresos:r.eg,egresosEfectivo:r.egEfe,ganancia:Math.round((r.cobrado-r.eg)*100)/100,esperado,contado:ct,diferencia:Math.round((ct-esperado)*100)/100});
   put('config','caja',{abierta:false,ultima:c.id});
   ui.modal=null;render();toast(`Caja cerrada. Vendiste ${money(r.cobrado)} en ${r.pagadas} boleta${r.pagadas===1?'':'s'}.`);toast('Recuerda descargar tu respaldo en la sección Caja.','warn');
 }
 function guardarProd(){
   const f=ui.modal.f; const nombre=String(f.nombre||'').trim();
   if(!nombre){toast('Escribe el nombre del producto.','warn');return}
-  const precio=Number(f.precio); if(!(precio>=0)||f.precio===''){toast('Escribe un precio válido.','warn');return}
+  const precio=num(f.precio); if(!(precio>=0)){toast('Escribe un precio válido, por ejemplo 12.50.','warn');return}
+  if(Object.entries(S.productos).some(([k,p])=>k!==ui.modal.id&&String(p.nombre).trim().toLowerCase()===nombre.toLowerCase())){toast(`Ya existe un producto llamado ${nombre}.`,'warn');return}
   const id=ui.modal.id||uid(); const prev=S.productos[id]||{};
-  put('productos',id,{nombre,categoria:String(f.categoria||'').trim()||'General',precio:Math.round(precio*100)/100,stock:Math.max(0,Math.floor(Number(f.stock)||0)),minimo:Math.max(0,Math.floor(Number(f.minimo)||0)),ilimitado:!!f.ilimitado,agotado:!!(f.ilimitado&&f.agotado)});
+  put('productos',id,{nombre,categoria:String(f.categoria||'').trim()||'General',precio:Math.round(precio*100)/100,stock:Math.max(0,Math.floor(num(f.stock)||0)),minimo:Math.max(0,Math.floor(num(f.minimo)||0)),ilimitado:!!f.ilimitado,agotado:!!(f.ilimitado&&f.agotado)});
   ui.modal=null;render();toast(prev.nombre?`${nombre} actualizado.`:`${nombre} registrado.`);
 }
 function ajustarStock(id,d){const p=S.productos[id];if(!p)return;put('productos',id,{...clone(p),stock:Math.max(0,(Number(p.stock)||0)+d)});render()}
@@ -542,7 +482,6 @@ function topView(){
   return `<div class="brand"><span class="logo">${ICON.logo}</span><div><b>${esc(neg().nombre)}</b><small>Caja virtual</small></div></div>
   <nav class="tabs" aria-label="Secciones">${tabs.map(([k,l])=>`<button class="tab" data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':''}>${l}</button>`).join('')}</nav>
   <div class="status">
-    ${fb.ok?`<button class="pill ${mode==='db'?'ok':'neutral'}" data-act="tab" data-v="caja">${mode==='db'?'Sincronizado':'Solo este equipo'}</button>`:''}
     <button class="pill ${c.abierta?'ok':'neutral'}" data-act="tab" data-v="caja">${c.abierta?'Caja abierta · '+hora(c.abiertaEn):'Caja cerrada'}</button>
     ${al.length?`<button class="pill ${alertas().some(p=>nivel(p)==='out')||alertasIns().some(i=>nivelIns(i)==='out')?'bad':'warn'}" data-act="alertas">${ICON.bell} ${al.length} por reponer</button>`:''}
   </div>`;
@@ -551,7 +490,6 @@ function view(){
   let h='';
   if(note)h+=`<div class="banner info">${esc(note)}</div>`;
   if(mode==='loading')return h+`<div class="empty">Cargando tu caja…</div>`;
-  if(fb.ok&&!fb.user&&ui.tab!=='caja')h+=`<div class="banner warn"><span>Este equipo trabaja solo. Inicia sesión para que los pedidos lleguen a los demás equipos.</span><button class="btn sm" data-act="tab" data-v="caja">Iniciar sesión</button></div>`;
   if(ui.tab==='mesas')h+=vMesas();
   if(ui.tab==='productos')h+=vProductos();
   if(ui.tab==='ventas')h+=vVentas();
@@ -625,15 +563,15 @@ function vVentas(){
   if(ui.vf==='caja')vs=c.abierta?vs.filter(v=>v.cajaId===c.id):[];
   if(ui.vf==='hoy')vs=vs.filter(v=>new Date(v.fecha).toDateString()===hoy);
   const pag=vs.filter(v=>v.estado==='pagada'), pen=vs.filter(v=>v.estado==='pendiente');
-  let h=`<div class="row"><h2>Ventas y boletas</h2><span class="spacer"></span><div class="chips">${[['caja','Caja actual'],['hoy','Hoy'],['todas',mode==='db'?'Últimos 30 días':'Todas']].map(([k,l])=>`<button class="chip" data-act="vf" data-v="${k}" aria-pressed="${ui.vf===k}">${l}</button>`).join('')}</div></div>
+  let h=`<div class="row"><h2>Ventas y boletas</h2><span class="spacer"></span><div class="chips">${[['caja','Caja actual'],['hoy','Hoy'],['todas','Todas']].map(([k,l])=>`<button class="chip" data-act="vf" data-v="${k}" aria-pressed="${ui.vf===k}">${l}</button>`).join('')}</div></div>
   <div class="stats"><div class="stat hero"><span class="lbl">Cobrado</span><b>${money(pag.reduce((a,v)=>a+v.total,0))}</b></div>
    <div class="stat"><span class="lbl">Boletas pagadas</span><b>${pag.length}</b></div>
    <div class="stat"><span class="lbl">Pendientes de pago</span><b style="color:${pen.length?'var(--warn)':'inherit'}">${pen.length} · ${money(pen.reduce((a,v)=>a+v.total,0))}</b></div>
    <div class="stat"><span class="lbl">Ticket promedio</span><b>${money(pag.length?pag.reduce((a,v)=>a+v.total,0)/pag.length:0)}</b></div></div>`;
   if(ui.vf==='caja'&&!c.abierta)return h+`<div class="empty">No hay una caja abierta. Mira <b>Hoy</b> o <b>Todas</b> para ver ventas anteriores.</div>`;
   if(!vs.length)return h+`<div class="empty">Aún no hay boletas en este periodo. Se crean desde una mesa con “Emitir boleta”.</div>`;
-  h+=`<div class="tablebox"><table><thead><tr><th>Boleta</th><th>Fecha</th><th>Mesa</th><th>Productos</th><th>Pago</th><th>Cód. fidelidad</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>${vs.slice(0,300).map(v=>`<tr>
-   <td class="mono">${numBoleta(v)}</td><td class="muted">${fecha(v.fecha)}</td><td>${esc(v.mesa)}</td><td class="muted">${v.items.reduce((a,i)=>a+i.cant,0)}</td><td>${esc(v.metodo||'—')}</td><td class="mono">${v.codigo&&v.estado!=='anulada'?esc(v.codigo):'—'}</td>
+  h+=`<div class="tablebox"><table><thead><tr><th>Boleta</th><th>Fecha</th><th>Mesa</th><th>Productos</th><th>Pago</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>${vs.slice(0,300).map(v=>`<tr>
+   <td class="mono">${numBoleta(v)}</td><td class="muted">${fecha(v.fecha)}</td><td>${esc(v.mesa)}</td><td class="muted">${v.items.reduce((a,i)=>a+i.cant,0)}</td><td>${esc(v.metodo||'—')}</td>
    <td>${v.estado==='pagada'?'<span class="pill ok">Pagada</span>':v.estado==='pendiente'?'<span class="pill warn">Pendiente</span>':'<span class="pill neutral">Anulada</span>'}</td>
    <td class="r mono">${money(v.total)}</td><td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${v.estado==='pendiente'?`<button class="btn sm primary" data-act="pagar" data-v="${v.id}">Cobrar</button>`:''}<button class="btn sm" data-act="boleta" data-v="${v.id}">Ver</button><button class="btn sm danger" data-act="delVenta" data-v="${v.id}">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`;
   return h;
@@ -642,22 +580,25 @@ function vCaja(){
   const c=caja(), N=neg(); let h='';
   if(!c.abierta){
     h+=`<div class="row"><h2>Caja</h2></div><section class="panel" style="max-width:520px"><h3>Abrir caja</h3><p class="muted" style="margin:0">Cuenta el efectivo con el que empiezas el día (sencillo para dar vuelto) y escríbelo aquí.</p>
-    <div class="field"><label for="apertura">Monto inicial en efectivo (S/)</label><input class="in mono" id="apertura" type="text" min="0" step="0.10" placeholder="0.00" inputmode="decimal"></div>
+    <div class="field"><label for="apertura">Monto inicial en efectivo (S/)</label><input class="in mono" id="apertura" type="text" autocomplete="off" placeholder="0.00" inputmode="decimal"></div>
     <button class="btn primary big" data-act="abrirCaja">Abrir caja</button></section>`;
   }else{
     const r=resumenCaja(c.id); const esperado=c.apertura+r.por.Efectivo-r.egEfe;
     h+=`<div class="row"><h2>Caja abierta</h2><span class="muted">desde ${fecha(c.abiertaEn)}</span><span class="spacer"></span><button class="btn primary" data-act="cerrarCaja">Cerrar caja</button></div>
-    <div class="stats"><div class="stat hero"><span class="lbl">Vendido hoy</span><b>${money(r.cobrado)}</b><span style="font-size:13px;opacity:.85">${r.pagadas} boleta${r.pagadas===1?'':'s'}</span></div>
-    <div class="stat"><span class="lbl">Monto inicial</span><b>${money(c.apertura)}</b></div>
-    <div class="stat"><span class="lbl">Efectivo esperado en caja</span><b>${money(esperado)}</b></div>
+    <div class="stats"><div class="stat"><span class="lbl">Inició con</span><b>${money(c.apertura)}</b><span class="muted" style="font-size:12.5px">Efectivo al abrir. No es venta.</span></div>
+    <div class="stat hero"><span class="lbl">Vendido</span><b>${money(r.cobrado)}</b><span style="font-size:13px;opacity:.85">${r.pagadas} boleta${r.pagadas===1?'':'s'} · sin contar el inicial</span></div>
+    <div class="stat"><span class="lbl">Vendido en efectivo</span><b>${money(r.por.Efectivo)}</b></div>
+    <div class="stat"><span class="lbl">Vendido en digital</span><b>${money(r.cobrado-r.por.Efectivo)}</b><span class="muted" style="font-size:12.5px">Yape, Plin, tarjeta y transferencia</span></div>
     <div class="stat"><span class="lbl">Egresos</span><b style="color:var(--bad)">− ${money(r.eg)}</b></div>
     <div class="stat"><span class="lbl">Ganancia (ventas − egresos)</span><b style="color:${r.cobrado-r.eg<0?'var(--bad)':'var(--ok)'}">${money(r.cobrado-r.eg)}</b></div></div>
-    <div class="stats">${METODOS.map(m=>`<div class="stat"><span class="lbl">${m}</span><b>${money(r.por[m])}</b></div>`).join('')}</div>
+    <div class="work" style="grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))">
+    <section class="panel"><h3>Ventas por método de pago</h3>${tablaMetodos(filasMetodo(c.apertura,r))}<p class="note" style="text-align:left;margin:0">Solo ventas. El monto inicial no se suma aquí.</p></section>
+    <section class="panel"><h3>Efectivo en caja ahora</h3>${cuadreEfectivo(c.apertura,r.por.Efectivo,r.egEfe,null,false)}</section></div>
     ${r.pend.length?`<div class="banner warn"><span>Tienes ${r.pend.length} boleta${r.pend.length===1?'':'s'} pendiente${r.pend.length===1?'':'s'} de pago por ${money(r.pend.reduce((a,v)=>a+v.total,0))}.</span><button class="btn sm" data-act="tab" data-v="ventas">Ver</button></div>`:''}`;
   }
   const hist=Object.entries(S.cajas).map(([id,x])=>({id,...x})).sort((a,b)=>String(b.cerradaEn).localeCompare(a.cerradaEn));
   h+=`<h3 style="margin-top:6px">Cierres anteriores</h3>`;
-  h+=hist.length?`<div class="tablebox"><table><thead><tr><th>Apertura</th><th>Cierre</th><th class="r">Boletas</th><th class="r">Vendido</th><th class="r">Egresos</th><th class="r">Efectivo esperado</th><th class="r">Contado</th><th class="r">Diferencia</th></tr></thead><tbody>${hist.map(x=>`<tr><td class="muted">${fecha(x.abiertaEn)}</td><td class="muted">${fecha(x.cerradaEn)}</td><td class="r mono">${x.boletas}</td><td class="r mono"><b>${money(x.cobrado)}</b></td><td class="r mono">${money(x.egresos||0)}</td><td class="r mono">${money(x.esperado)}</td><td class="r mono">${money(x.contado)}</td><td class="r">${x.diferencia===0?'<span class="pill ok">Cuadra</span>':`<span class="pill ${x.diferencia>0?'warn':'bad'}">${x.diferencia>0?'Sobra ':'Falta '}${money(Math.abs(x.diferencia))}</span>`}</td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">Cuando cierres tu primera caja, aquí verás cuánto ganaste cada día.</div>`;
+  h+=hist.length?`<div class="tablebox"><table><thead><tr><th>Apertura</th><th>Cierre</th><th class="r">Boletas</th><th class="r">Inició con</th><th class="r">Vendido</th><th class="r">Efectivo</th><th class="r">Digital</th><th class="r">Egresos</th><th class="r">Ganancia</th><th class="r">Diferencia</th><th></th></tr></thead><tbody>${hist.map(x=>`<tr><td class="muted">${fecha(x.abiertaEn)}</td><td class="muted">${fecha(x.cerradaEn)}</td><td class="r mono">${x.boletas}</td><td class="r mono muted">${money(x.apertura||0)}</td><td class="r mono"><b>${money(x.cobrado)}</b></td><td class="r mono">${money(x.porMetodo?.Efectivo||0)}</td><td class="r mono">${money(x.cobrado-(x.porMetodo?.Efectivo||0))}</td><td class="r mono">${money(x.egresos||0)}</td><td class="r mono" style="color:${(x.cobrado-(x.egresos||0))<0?'var(--bad)':'var(--ok)'}">${money(x.cobrado-(x.egresos||0))}</td><td class="r">${((x.diferenciaTotal??x.diferencia))===0?'<span class="pill ok">Cuadra</span>':(d=>`<span class="pill ${d>0?'warn':'bad'}">${d>0?'Sobra ':'Falta '}${money(Math.abs(d))}</span>`)(x.diferenciaTotal??x.diferencia)}</td><td class="r"><button class="btn sm" data-act="verCierre" data-v="${x.id}">Detalle</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">Cuando cierres tu primera caja, aquí verás cuánto ganaste cada día.</div>`;
   let ult=null; try{ult=localStorage.getItem(LS+'.ultimoRespaldo')}catch(e){}
   h+=`<section class="panel" style="max-width:640px"><h3>Respaldo de tus datos</h3><p class="muted" style="margin:0">Todo se guarda en este navegador. Descarga un respaldo al cerrar caja; si cambias de equipo o se borran los datos del navegador, lo restauras desde aquí.</p>
    <div class="row"><button class="btn primary" data-act="respaldo">Descargar respaldo</button><label class="btn" for="restore-file">Restaurar respaldo</label><input id="restore-file" type="file" accept=".json,application/json" data-restore hidden></div>
@@ -668,18 +609,6 @@ function vCaja(){
    <div class="field"><label for="neg-dir">Dirección</label><input class="in" id="neg-dir" data-neg="direccion" value="${esc(N.direccion)}"></div>
    <div class="field"><label for="neg-serie">Serie de boleta</label><input class="in mono" id="neg-serie" data-neg="serie" value="${esc(N.serie)}"></div></div>
    <p class="note" style="text-align:left;margin:0">Próxima boleta: <span class="mono">${esc(N.serie)}-${String(N.siguiente).padStart(8,'0')}</span></p></section>`;
-  h+=`<section class="panel" style="max-width:640px"><h3>Tarjeta de fidelidad</h3><p class="muted" style="margin:0">Cada boleta lleva un código único de 6 caracteres. El cliente lo ingresa en su tarjeta y suma un sello. Con 10 sellos elige un producto gratis, y para entregarlo el cajero escribe este PIN en el celular del cliente.</p>
-   ${/^\d{4}$/.test(N.pin||'')?'':'<div class="banner warn"><span>Todavía no hay PIN. Sin él no se pueden confirmar canjes.</span></div>'}
-   <div class="pinrow"><div class="field"><label for="neg-pin">PIN del cajero (4 números)</label><input class="in mono" id="neg-pin" data-neg="pin" type="${ui.verPin?'text':'password'}" value="${esc(N.pin||'')}" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="letter-spacing:.3em"></div>
-   <button class="btn" data-act="verPin">${ui.verPin?'Ocultar':'Mostrar'}</button></div>
-   <p class="note" style="text-align:left;margin:0">Cámbialo si alguien que no es del equipo llega a verlo.</p>
-   ${(()=>{const pend=colaFid().length;
-     if(!fb.ok)return '<div class="banner bad"><span>No se pudo cargar Firebase. Revisa tu conexión y recarga.</span></div>';
-     if(fb.user)return `<div class="banner" style="background:var(--ok-soft);color:var(--ok)"><span>Conectado como <b>${esc(fb.user.email)}</b>. ${pend?`Enviando ${pend} cambio${pend===1?'':'s'}…`:'Todos los códigos están registrados.'}</span><button class="btn sm" data-act="salirFid">Cerrar sesión</button></div>`;
-     return `<div class="banner warn"><span>Inicia sesión con el usuario del cajero para que los códigos de las boletas funcionen en las tarjetas.${pend?` Hay ${pend} cambio${pend===1?'':'s'} esperando.`:''}</span></div>
-     <div class="grid2"><div class="field"><label for="fid-email">Correo del cajero</label><input class="in" id="fid-email" type="email" autocomplete="username" data-in="fidEmail" value="${esc(ui.fidEmail||'')}"></div>
-     <div class="field"><label for="fid-pass">Contraseña</label><input class="in" id="fid-pass" type="password" autocomplete="current-password" data-in="fidPass" value="${esc(ui.fidPass||'')}"></div></div>
-     <div class="row"><button class="btn primary" data-act="entrarFid">Iniciar sesión</button></div>`})()}</section>`;
   return h;
 }
 
@@ -722,12 +651,11 @@ function receipt(v){
   <div class="kv tot"><span>TOTAL</span><span>${money(v.total)}</span></div>
   ${v.estado==='pagada'?`<hr><div class="kv"><span>Pago</span><span>${esc(v.metodo)}</span></div>${v.metodo==='Efectivo'?`<div class="kv"><span>Recibido</span><span>${money(v.recibido)}</span></div><div class="kv"><span>Vuelto</span><span>${money(v.vuelto)}</span></div>`:''}`:''}
   <div class="c"><span class="stamp ${v.estado==='pagada'?'paid':v.estado==='pendiente'?'pend':'void'}">${v.estado==='pagada'?'PAGADO':v.estado==='pendiente'?'POR PAGAR':'ANULADA'}</span></div>
-  ${v.codigo&&v.estado!=='anulada'?`<div class="fid"><div class="lbl">TARJETA DE FIDELIDAD</div><b>${esc(v.codigo)}</b><div>Ingresa este código y suma un sello.<br>10 sellos = 1 producto gratis.</div></div>`:''}
   <small>Comprobante interno de control. No reemplaza la boleta electrónica SUNAT.</small></div>`;
 }
 function receiptText(v){
   const N=neg();
-  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:'',...(v.codigo&&v.estado!=='anulada'?['','Código de fidelidad: '+v.codigo,'Ingrésalo y suma un sello. 10 sellos = 1 producto gratis.']:[])].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
+  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:''].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
 }
 function modalView(){
   const M=ui.modal; if(!M)return'';
@@ -739,7 +667,7 @@ function modalView(){
     b=`<h2>Confirmar pago</h2><p class="muted" style="margin:0">Boleta ${numBoleta(v)} · ${esc(v.mesa)}</p>
     <div class="bigtotal"><span class="lbl">Total a cobrar</span><b>${money(v.total)}</b></div>
     <div class="field"><label>Método de pago</label><div class="seg">${METODOS.map(m=>`<button data-act="metodo" data-v="${m}" aria-pressed="${f.metodo===m}">${m}</button>`).join('')}</div></div>
-    ${f.metodo==='Efectivo'?`<div class="field"><label for="recibido">Recibido del cliente (S/)</label><input class="in mono" id="recibido" type="text" min="0" step="0.10" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${v.total.toFixed(2)}"></div>
+    ${f.metodo==='Efectivo'?`<div class="field"><label for="recibido">Recibido del cliente (S/)</label><input class="in mono" id="recibido" type="text" autocomplete="off" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${v.total.toFixed(2)}"></div>
     <div class="chips">${quick.map(x=>`<button class="chip" data-act="rec" data-v="${x}">${x===v.total?'Exacto':money(x)}</button>`).join('')}</div>
     <div class="vuelto ${f.recibido===''?'idle':vuelto<0?'falta':''}"><span class="lbl" style="color:inherit">${f.recibido!==''&&vuelto<0?'Falta':'Vuelto'}</span><b>${f.recibido===''?'—':money(Math.abs(vuelto))}</b></div>`:`<p class="muted" style="margin:0">Verifica que el pago por ${esc(f.metodo)} haya llegado antes de confirmar.</p>`}
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Cancelar</button><button class="btn primary" style="flex:2" data-act="okPago" ${f.metodo==='Efectivo'&&f.recibido!==''&&vuelto<0?'disabled':''}>Confirmar pago</button></div>`}
@@ -752,7 +680,7 @@ function modalView(){
     <div class="mini-list">${items.map(i=>`<div><span>${i.cant} × ${esc(i.nombre)}</span><span class="mono">${money(i.precio*i.cant)}</span></div>`).join('')}</div>
     <div class="bigtotal"><span class="lbl">Total a cobrar</span><b>${money(total)}</b></div>
     <div class="field"><label>¿Cómo paga?</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${f.metodo===x}">${x}</button>`).join('')}</div></div>
-    ${efe?`<div class="field"><label for="recibido">¿Con cuánto paga? (S/)</label><input class="in mono" id="recibido" type="text" min="0" step="0.10" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${total.toFixed(2)}" style="font-size:20px;padding:12px"></div>
+    ${efe?`<div class="field"><label for="recibido">¿Con cuánto paga? (S/)</label><input class="in mono" id="recibido" type="text" autocomplete="off" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${total.toFixed(2)}" style="font-size:20px;padding:12px"></div>
     <div class="chips">${quick.map(x=>`<button class="chip" data-act="rec" data-v="${x}">${x===total?'Exacto':money(x)}</button>`).join('')}</div>
     <div class="vuelto ${f.recibido===''?'idle':falta?'falta':''}"><span class="lbl" style="color:inherit">${falta?'Falta':'Vuelto'}</span><b>${f.recibido===''?'—':money(Math.abs(vu))}</b></div>`
     :`<p class="muted" style="margin:0">Verifica que el pago por ${esc(f.metodo)} haya llegado antes de confirmar.</p>`}
@@ -760,27 +688,26 @@ function modalView(){
   if(M.k==='cancelarPed'){const m=S.mesas[M.mid]||{items:[]};const n=(m.items||[]).reduce((a,i)=>a+i.cant,0);
     b=`<h2>¿Cancelar el pedido de ${esc(MESAS.find(x=>x.id===M.mid).n)}?</h2><p class="muted" style="margin:0">Se quitan los ${n} producto${n===1?'':'s'} y la mesa queda libre. No se descuenta nada del stock.${m.ventaPendiente?' La boleta emitida queda anulada.':''}</p>
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, volver</button><button class="btn danger" style="flex:1" data-act="okCancelarPed">Sí, cancelar pedido</button></div>`}
-  if(M.k==='migrar'){b=`<h2>¿Subir los datos de este equipo?</h2><p class="muted" style="margin:0">La base de datos compartida está vacía. Este equipo tiene ${Object.keys(S.productos).length} productos y ${Object.keys(S.ventas).length} boletas. Súbelos desde la computadora de la caja, que es la que tiene los datos reales; en los demás equipos elige “Empezar vacío” solo si quieres borrar lo de este equipo.</p><div class="row"><button class="btn" style="flex:1" data-act="okVacio">Empezar vacío</button><button class="btn primary" style="flex:1" data-act="okMigrar">Subir datos</button></div>`}
   if(M.k==='restaurar'){const d=M.datos;b=`<h2>¿Restaurar este respaldo?</h2><p class="muted" style="margin:0">${M.fecha?'Respaldo del '+fecha(M.fecha)+'. ':''}Tiene ${Object.keys(d.productos||{}).length} productos y ${Object.keys(d.ventas||{}).length} boletas. Reemplaza todo lo que hay ahora en este equipo.</p><div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Cancelar</button><button class="btn primary" style="flex:1" data-act="okRestaurar">Restaurar</button></div>`}
   if(M.k==='ins'){const f=M.f;
     b=`<h2>${M.id?'Editar insumo':'Nuevo insumo'}</h2>
     <div class="field"><label for="if-nombre">Nombre</label><input class="in" id="if-nombre" data-mf="nombre" value="${esc(f.nombre)}" placeholder="Ej. Azúcar, vasos 12 oz, balón de gas"></div>
     <div class="field"><label>Unidad</label><div class="seg">${UNIDADES.map(u=>`<button data-act="iunid" data-v="${u}" aria-pressed="${f.unidad===u}">${u}</button>`).join('')}</div></div>
-    <div class="grid2"><div class="field"><label for="if-cant">Cantidad que tienes (${esc(f.unidad)})</label><input class="in mono" id="if-cant" type="text" min="0" step="any" inputmode="decimal" data-mf="cantidad" value="${esc(f.cantidad)}"></div>
-    <div class="field"><label for="if-min">Avisarme cuando queden</label><input class="in mono" id="if-min" type="text" min="0" step="any" inputmode="decimal" data-mf="minimo" value="${esc(f.minimo)}"></div></div>
+    <div class="grid2"><div class="field"><label for="if-cant">Cantidad que tienes (${esc(f.unidad)})</label><input class="in mono" id="if-cant" type="text" autocomplete="off" inputmode="decimal" data-mf="cantidad" value="${esc(f.cantidad)}"></div>
+    <div class="field"><label for="if-min">Avisarme cuando queden</label><input class="in mono" id="if-min" type="text" autocomplete="off" inputmode="decimal" data-mf="minimo" value="${esc(f.minimo)}"></div></div>
     ${M.borrar?`<div class="banner bad"><span>¿Borrar ${esc(f.nombre)}? No se puede deshacer.</span><button class="btn sm danger" data-act="okBorrarIns">Sí, borrar</button></div>`:''}
     <div class="row">${M.id&&!M.borrar?`<button class="btn danger" data-act="borrarIns">Borrar</button>`:''}<span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okIns">Guardar</button></div>`}
   if(M.k==='insMov'){const i=S.insumos[M.id];if(!i)return'';const usar=M.tipo==='usar';const q=Number(M.f.cant)||0;const tiene=Number(i.cantidad)||0;const queda=usar?Math.max(0,tiene-q):tiene+q;
     b=`<h2>${usar?'Usar':'Reponer'} ${esc(i.nombre)}</h2><p class="muted" style="margin:0">Tienes <b class="mono">${fmtCant(tiene,i.unidad)}</b>. Te avisa cuando queden ${fmtCant(i.minimo,i.unidad)}.</p>
-    <div class="field"><label for="im-cant">${usar?'Cantidad que usaste':'Cantidad que compraste'} (${esc(i.unidad)})</label><input class="in mono" id="im-cant" type="text" min="0" step="any" inputmode="decimal" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
+    <div class="field"><label for="im-cant">${usar?'Cantidad que usaste':'Cantidad que compraste'} (${esc(i.unidad)})</label><input class="in mono" id="im-cant" type="text" autocomplete="off" inputmode="decimal" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
     ${q>0?`<p class="muted" style="margin:0">Quedarás con <b class="mono">${fmtCant(queda,i.unidad)}</b>${usar&&q>tiene?'. Estás usando más de lo registrado; quedará en 0':''}.</p>`:''}
-    ${usar?'':`<div class="field"><label for="im-costo">¿Cuánto pagaste? (S/, opcional)</label><input class="in mono" id="im-costo" type="text" min="0" step="0.10" inputmode="decimal" data-mf="costo" value="${esc(M.f.costo)}" data-live placeholder="0.00"></div>
+    ${usar?'':`<div class="field"><label for="im-costo">¿Cuánto pagaste? (S/, opcional)</label><input class="in mono" id="im-costo" type="text" autocomplete="off" inputmode="decimal" data-mf="costo" value="${esc(M.f.costo)}" data-live placeholder="0.00"></div>
     ${Number(M.f.costo)>0?`<div class="field"><label>Pagado con</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${M.f.metodo===x}">${x}</button>`).join('')}</div></div><p class="note" style="text-align:left;margin:0">Se registra también como egreso en la categoría Insumos.</p>`:''}`}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okInsMov" ${q>0?'':'disabled'}>${usar?'Descontar':'Agregar'}</button></div>`}
   if(M.k==='egr'){const f=M.f;
     b=`<h2>Registrar egreso</h2>
     <div class="field"><label for="ef-desc">¿En qué se gastó?</label><input class="in" id="ef-desc" data-mf="descripcion" value="${esc(f.descripcion)}" placeholder="Ej. Pago de luz, compra de pan, sueldo"></div>
-    <div class="field"><label for="ef-monto">Monto (S/)</label><input class="in mono" id="ef-monto" type="text" min="0" step="0.10" inputmode="decimal" data-mf="monto" value="${esc(f.monto)}" placeholder="0.00" style="font-size:20px;padding:12px"></div>
+    <div class="field"><label for="ef-monto">Monto (S/)</label><input class="in mono" id="ef-monto" type="text" autocomplete="off" inputmode="decimal" data-mf="monto" value="${esc(f.monto)}" placeholder="0.00" style="font-size:20px;padding:12px"></div>
     <div class="field"><label>Categoría</label><div class="chips">${EGCATS.map(c=>`<button class="chip" data-act="ecat" data-v="${c}" aria-pressed="${f.categoria===c}">${c}</button>`).join('')}</div></div>
     <div class="field"><label>Pagado con</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${f.metodo===x}">${x}</button>`).join('')}</div></div>
     ${f.metodo==='Efectivo'?`<p class="note" style="text-align:left;margin:0">${caja().abierta?'Se descuenta del efectivo esperado en la caja abierta.':'La caja está cerrada: el egreso se registra, pero no entra en ningún cierre.'}</p>`:''}
@@ -792,6 +719,15 @@ function modalView(){
     ${cerrada?`<p class="muted" style="margin:0">Este egreso es de una caja ya cerrada. El resumen guardado de ese cierre no cambia.</p>`:''}
     ${e.categoria==='Insumos'?`<p class="muted" style="margin:0">La cantidad de insumos no cambia. Si hace falta, corrígela en Insumos.</p>`:''}
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, conservar</button><button class="btn danger" style="flex:1;background:var(--bad);color:#fff;border-color:var(--bad)" data-act="okDelEgr">Sí, eliminar</button></div>`}
+  if(M.k==='verCierre'){const x=S.cajas[M.id];if(!x)return'';wide='xwide';
+    const r={por:x.porMetodo||{},egPor:x.egresosPor||{Efectivo:x.egresosEfectivo||0}};
+    const filas=filasMetodo(x.apertura||0,r);
+    const cont=x.contadoPor||{Efectivo:x.contado};
+    b=`<h2>Cierre del ${fecha(x.cerradaEn)}</h2><p class="muted" style="margin:0">Abierta ${fecha(x.abiertaEn)} · ${x.boletas} boleta${x.boletas===1?'':'s'}</p>
+    <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="stat"><span class="lbl">Inició con</span><b>${money(x.apertura||0)}</b></div><div class="stat hero"><span class="lbl">Vendido</span><b>${money(x.cobrado)}</b></div><div class="stat"><span class="lbl">Egresos</span><b style="color:var(--bad)">${money(x.egresos||0)}</b></div><div class="stat"><span class="lbl">Ganancia</span><b>${money(x.cobrado-(x.egresos||0))}</b></div></div>
+    <h3>Ventas por método de pago</h3>${tablaMetodos(filas,{contado:cont})}
+    <h3>Efectivo en caja</h3>${cuadreEfectivo(x.apertura||0,r.por.Efectivo||0,r.egPor.Efectivo||0,cont.Efectivo,false)}
+    <button class="btn" data-act="cerrarModal">Cerrar</button>`}
   if(M.k==='delVenta'){const v=S.ventas[M.id];if(!v)return'';
     const cont=v.items.filter(i=>{const p=S.productos[i.pid];return p&&!p.ilimitado}).reduce((a,i)=>a+i.cant,0);
     const cerrada=v.cajaId&&S.cajas[v.cajaId];
@@ -807,42 +743,64 @@ function modalView(){
     b=`<h2>${M.id?'Editar producto':'Nuevo producto'}</h2>
     <div class="field"><label for="pf-nombre">Nombre</label><input class="in" id="pf-nombre" data-mf="nombre" value="${esc(f.nombre)}" placeholder="Ej. Chicha morada 1 L"></div>
     <div class="grid2"><div class="field"><label for="pf-cat">Categoría</label><input class="in" id="pf-cat" list="cats" data-mf="categoria" value="${esc(f.categoria)}" placeholder="Bebidas"><datalist id="cats">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
-    <div class="field"><label for="pf-precio">Precio de venta (S/)</label><input class="in mono" id="pf-precio" type="text" min="0" step="0.10" inputmode="decimal" data-mf="precio" value="${esc(f.precio)}"></div>
-    ${f.ilimitado?'':`<div class="field"><label for="pf-stock">Cantidad que tienes</label><input class="in mono" id="pf-stock" type="text" min="0" step="1" inputmode="numeric" data-mf="stock" value="${esc(f.stock)}"></div>
-    <div class="field"><label for="pf-min">Avisarme cuando queden</label><input class="in mono" id="pf-min" type="text" min="0" step="1" inputmode="numeric" data-mf="minimo" value="${esc(f.minimo)}"></div>`}</div>
+    <div class="field"><label for="pf-precio">Precio de venta (S/)</label><input class="in mono" id="pf-precio" type="text" autocomplete="off" inputmode="decimal" data-mf="precio" value="${esc(f.precio)}"></div>
+    ${f.ilimitado?'':`<div class="field"><label for="pf-stock">Cantidad que tienes</label><input class="in mono" id="pf-stock" type="text" autocomplete="off" inputmode="numeric" data-mf="stock" value="${esc(f.stock)}"></div>
+    <div class="field"><label for="pf-min">Avisarme cuando queden</label><input class="in mono" id="pf-min" type="text" autocomplete="off" inputmode="numeric" data-mf="minimo" value="${esc(f.minimo)}"></div>`}</div>
     <label class="check"><input type="checkbox" id="pf-ilim" data-mfc="ilimitado" ${f.ilimitado?'checked':''}><span><b>Stock ilimitado</b><br><span class="muted" style="font-size:13px">Para platos que se preparan o cosas que no cuentas. No se descuenta nada; solo marcas cuando se acabe.</span></span></label>
     ${f.ilimitado?`<label class="check"><input type="checkbox" id="pf-agot" data-mfc="agotado" ${f.agotado?'checked':''}><span><b>Se acabó por ahora</b><br><span class="muted" style="font-size:13px">No se podrá agregar a las mesas hasta que lo desmarques.</span></span></label>`:''}
     ${M.borrar?`<div class="banner bad"><span>¿Borrar ${esc(f.nombre)}? Las boletas anteriores no cambian.</span><button class="btn sm danger" data-act="okBorrar">Sí, borrar</button></div>`:''}
     <div class="row">${M.id&&!M.borrar?`<button class="btn danger" data-act="borrarProd">Borrar</button>`:''}<span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okProd">Guardar</button></div>`}
   if(M.k==='reponer'){const p=S.productos[M.id];if(!p)return'';b=`<h2>Reponer ${esc(p.nombre)}</h2><p class="muted" style="margin:0">Tienes <b class="mono">${p.stock}</b>. Te avisa cuando queden ${p.minimo} o menos.</p>
-    <div class="field"><label for="rep">Cantidad que ingresa</label><input class="in mono" id="rep" type="text" min="1" step="1" inputmode="numeric" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
+    <div class="field"><label for="rep">Cantidad que ingresa</label><input class="in mono" id="rep" type="text" autocomplete="off" inputmode="numeric" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
     ${Number(M.f.cant)>0?`<p class="muted" style="margin:0">Quedarás con <b class="mono">${(Number(p.stock)||0)+Math.floor(Number(M.f.cant))}</b>.</p>`:''}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okReponer" ${Number(M.f.cant)>0?'':'disabled'}>Agregar al stock</button></div>`}
-  if(M.k==='cerrar'){const c=caja();const r=resumenCaja(c.id);const esp=c.apertura+r.por.Efectivo-r.egEfe;const ct=M.f.contado;const d=Math.round(((Number(ct)||0)-esp)*100)/100;wide='wide';
+  if(M.k==='cerrar'){const c=caja();const r=resumenCaja(c.id);const filas=filasMetodo(c.apertura,r);const esp=filas[0].esp;const ct=M.f.ct.Efectivo??'';const d=Math.round(((Number(ct)||0)-esp)*100)/100;wide='xwide';
     b=`<h2>Cerrar caja</h2>
-    <div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat hero"><span class="lbl">Vendido</span><b>${money(r.cobrado)}</b>${r.eg?`<span style="font-size:13px;opacity:.85">Ganancia ${money(r.cobrado-r.eg)}</span>`:''}</div><div class="stat"><span class="lbl">Efectivo esperado</span><b>${money(esp)}</b></div></div>
-    <div class="muted" style="font-size:13.5px">${money(c.apertura)} inicial + ${money(r.por.Efectivo)} en ventas en efectivo${r.egEfe?` − ${money(r.egEfe)} de egresos en efectivo`:''} · ${METODOS.filter(m=>m!=='Efectivo'&&r.por[m]).map(m=>`${m} ${money(r.por[m])}`).join(' · ')||'sin pagos digitales'}</div>
-    ${r.pend.length?`<div class="banner warn">Quedan ${r.pend.length} boleta${r.pend.length===1?'':'s'} sin cobrar. No se suman al cierre.</div>`:''}
-    <div class="field"><label for="contado">Efectivo que contaste en caja (S/)</label><input class="in mono" id="contado" type="text" min="0" step="0.10" inputmode="decimal" data-mf="contado" value="${esc(ct)}" data-live placeholder="${esp.toFixed(2)}"></div>
-    ${ct!==''?`<div class="diff ${d===0?'ok':d>0?'warn':'bad'}"><span>${d===0?'La caja cuadra':d>0?'Sobra':'Falta'}</span><span class="mono">${money(Math.abs(d))}</span></div>`:''}
-    <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okCerrar" ${ct===''?'disabled':''}>Cerrar caja</button></div>`}
+    <div class="stats" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))"><div class="stat"><span class="lbl">Inició con</span><b>${money(c.apertura)}</b></div><div class="stat hero"><span class="lbl">Vendido</span><b>${money(r.cobrado)}</b></div><div class="stat"><span class="lbl">Egresos</span><b style="color:var(--bad)">${money(r.eg)}</b></div><div class="stat"><span class="lbl">Ganancia</span><b>${money(r.cobrado-r.eg)}</b></div></div>
+        ${r.pend.length?`<div class="banner warn">Quedan ${r.pend.length} boleta${r.pend.length===1?'':'s'} sin cobrar. No se suman al cierre.</div>`:''}
+    <h3>1. Ventas por método de pago</h3><p class="muted" style="margin:0;font-size:13.5px">Revisa tu app de Yape, Plin, el POS o tu cuenta y escribe lo que llegó. Si lo dejas vacío, se toma el neto.</p>
+    ${tablaMetodos(filas,{input:true,contado:M.f.ct})}
+    <h3>2. Cuenta el efectivo de la caja</h3>${cuadreEfectivo(c.apertura,r.por.Efectivo,r.egEfe,M.f.ct.Efectivo,true)}
+    <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okCerrar" ${ct===''?'disabled':''}>${ct===''?'Escribe el efectivo contado':'Cerrar caja'}</button></div>`}
   if(M.k==='alertas'){const al=alertas(),ai=alertasIns();
     b=`<h2>Por reponer</h2><h3>Productos</h3>${al.length?`<div class="lines">${al.map(p=>`<div class="line" style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(p.nombre)}<br><span class="muted" style="font-weight:400;font-size:13px">${p.ilimitado?'Stock ilimitado · marcado como agotado':`Quedan ${p.stock} · aviso en ${p.minimo}`}</span></span><span style="grid-column:2;grid-row:1" class="row">${nivel(p)==='out'?'<span class="pill bad">Agotado</span>':'<span class="pill warn">Por acabarse</span>'}${p.ilimitado?`<button class="btn sm" data-act="hayOtra" data-v="${p.id}">Ya hay</button>`:`<button class="btn sm" data-act="reponer" data-v="${p.id}">Reponer</button>`}</span></div>`).join('')}</div>`:'<div class="empty">Productos al día.</div>'}<h3>Insumos</h3>${ai.length?`<div class="lines">${ai.map(i=>`<div class="line" style="grid-template-columns:minmax(0,1fr) auto"><span class="nm">${esc(i.nombre)}<br><span class="muted" style="font-weight:400;font-size:13px">Quedan ${fmtCant(i.cantidad,i.unidad)} · aviso en ${fmtCant(i.minimo,i.unidad)}</span></span><span style="grid-column:2;grid-row:1" class="row">${nivelIns(i)==='out'?'<span class="pill bad">Agotado</span>':'<span class="pill warn">Por acabarse</span>'}<button class="btn sm" data-act="insRep" data-v="${i.id}">Reponer</button></span></div>`).join('')}</div>`:'<div class="empty">Insumos al día.</div>'}<button class="btn" data-act="cerrarModal">Cerrar</button>`}
   return `<div class="ov" data-act="ov"><div class="modal ${wide}" role="dialog" aria-modal="true">${b}</div></div>`;
 }
 
 /* ---------- render ---------- */
+/* Actualiza la pantalla sin reemplazar el campo donde se está escribiendo (evita que el texto salga al revés) */
+function morph(from,to){
+  if(from.nodeType!==to.nodeType||from.nodeName!==to.nodeName||(from.nodeType===1&&(from.id||to.id)&&from.id!==to.id)){from.replaceWith(to);return}
+  if(from.nodeType===3||from.nodeType===8){if(from.nodeValue!==to.nodeValue)from.nodeValue=to.nodeValue;return}
+  if(from.nodeType!==1)return;
+  for(const a of [...from.attributes])if(!to.hasAttribute(a.name))from.removeAttribute(a.name);
+  for(const a of [...to.attributes])if(from.getAttribute(a.name)!==a.value)from.setAttribute(a.name,a.value);
+  const tag=from.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT'){
+    if(from.type==='checkbox'||from.type==='radio'){from.checked=to.hasAttribute('checked');return}
+    if(from.type==='file')return;
+    if(from!==document.activeElement){const v=to.getAttribute('value')??'';if(from.value!==v)from.value=v}
+    return;
+  }
+  const fc=[...from.childNodes],tc=[...to.childNodes];
+  for(let i=0;i<tc.length;i++){if(i<fc.length)morph(fc[i],tc[i]);else from.appendChild(tc[i])}
+  for(let i=tc.length;i<fc.length;i++)fc[i].remove();
+}
+function patch(el,html){const t=document.createElement('div');t.innerHTML=html;const box=document.createElement('div');box.append(...t.childNodes);
+  const fc=[...el.childNodes],tc=[...box.childNodes];for(let i=0;i<tc.length;i++){if(i<fc.length)morph(fc[i],tc[i]);else el.appendChild(tc[i])}for(let i=tc.length;i<fc.length;i++)fc[i].remove()}
+let renderPend=false;
 function render(){
-  const a=document.activeElement, id=a&&a.id; let s=null,e=null; try{s=a.selectionStart;e=a.selectionEnd}catch(_){}
-  const val=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&a.type!=='checkbox'&&a.type!=='file'?a.value:null;
-  $('top').innerHTML=topView(); $('app').innerHTML=view(); $('modal').innerHTML=modalView();
-  if(id){const el=$(id);if(el&&el!==document.activeElement){if(val!==null&&el.tagName===a.tagName&&el.value!==val)el.value=val;el.focus();try{const n=(el.value||'').length;el.setSelectionRange(s!=null?s:n,e!=null?e:n)}catch(_){}}}
+  const hadModal=!!$('modal').firstChild;
+  patch($('top'),topView()); patch($('app'),view()); patch($('modal'),modalView());
+  document.body.style.overflow=ui.modal?'hidden':'';
+  if(ui.modal&&!hadModal){const m=document.querySelector('.modal');if(m&&!m.contains(document.activeElement)){m.setAttribute('tabindex','-1');m.focus({preventScroll:true})}}
 }
 function toast(msg,kind){const t=document.createElement('div');t.className='toast '+(kind||'');t.textContent=msg;$('toasts').appendChild(t);setTimeout(()=>t.remove(),kind?5200:3200)}
 
 document.addEventListener('click',ev=>{
-  const b=ev.target.closest('[data-act]'); if(!b)return; const act=b.dataset.act, v=b.dataset.v;
-  if(act==='ov'){if(ev.target===b&&ui.modal?.k!=='migrar'){ui.modal=null;render()}return}
+  const b=ev.target.closest('[data-act]'); if(!b||b.disabled)return; const act=b.dataset.act, v=b.dataset.v;
+  if((/^ok/.test(act)||['metodo','rec','iunid','ecat','borrarProd','borrarIns'].includes(act))&&!ui.modal)return;
+  if(act==='ov'){if(ev.target===b){ui.modal=null;render()}return}
   switch(act){
     case'tab':ui.tab=v;ui.modal=null;break;
     case'mesa':ui.mesa=v;ui.mside=(S.mesas[v]?.items||[]).length?'pedido':'productos';break;
@@ -873,22 +831,18 @@ document.addEventListener('click',ev=>{
     case'okBorrar':{const n=S.productos[ui.modal.id]?.nombre;put('productos',ui.modal.id,null);ui.modal=null;toast(`${n} borrado.`);break}
     case'borrarEj':prods().filter(p=>p.ejemplo).forEach(p=>put('productos',p.id,null));toast('Productos de ejemplo borrados.');break;
     case'reponer':ui.modal={k:'reponer',id:v,f:{cant:''}};break;
-    case'okReponer':{const n=Math.floor(Number(ui.modal.f.cant));const p=S.productos[ui.modal.id];ajustarStock(ui.modal.id,n);ui.modal=null;toast(`+${n} ${p.nombre}. Ahora tienes ${(Number(p.stock)||0)+n}.`);break}
+    case'okReponer':{const n=Math.floor(num(ui.modal.f.cant));if(!(n>0)){toast('Escribe una cantidad mayor a cero.','warn');return}const p=S.productos[ui.modal.id];ajustarStock(ui.modal.id,n);ui.modal=null;toast(`+${n} ${p.nombre}. Ahora tienes ${(Number(p.stock)||0)+n}.`);break}
     case'stk':ajustarStock(v,Number(b.dataset.d));return;
     case'abrirCaja':abrirCaja();return;
-    case'cerrarCaja':ui.modal={k:'cerrar',f:{contado:''}};break;
-    case'okCerrar':cerrarCaja(ui.modal.f.contado);return;
+    case'cerrarCaja':ui.modal={k:'cerrar',f:{ct:{}}};break;
+    case'okCerrar':cerrarCaja(ui.modal.f.ct);return;
+    case'verCierre':ui.modal={k:'verCierre',id:v};break;
     case'alertas':ui.modal={k:'alertas'};break;
     case'copiar':{const t=receiptText(S.ventas[v]);try{navigator.clipboard.writeText(t).then(()=>toast('Boleta copiada.'),()=>toast('No se pudo copiar en este navegador.','warn'))}catch(_){toast('No se pudo copiar en este navegador.','warn')}return}
     case'cerrarModal':ui.modal=null;break;
-    case'verPin':ui.verPin=!ui.verPin;break;
-    case'okMigrar':migrar();return;
-    case'okVacio':ui.modal=null;escuchar();return;
-    case'entrarFid':entrarFid();return;
-    case'salirFid':fb.auth.signOut();toast('Sesión cerrada.');return;
     case'ef':ui.ef=v;break;
-    case'nuevoIns':ui.modal={k:'ins',id:null,f:{nombre:'',unidad:'unid.',cantidad:'',minimo:''}};break;
-    case'editIns':{const i=S.insumos[v];ui.modal={k:'ins',id:v,f:{nombre:i.nombre,unidad:i.unidad,cantidad:String(i.cantidad),minimo:String(i.minimo)}};break}
+    case'nuevoIns':ui.modal={k:'ins',id:null,f:{nombre:'',unidad:'unid',cantidad:'',minimo:''}};break;
+    case'editIns':{const i=S.insumos[v];ui.modal={k:'ins',id:v,f:{nombre:i.nombre,unidad:i.unidad==='unid.'?'unid':i.unidad,cantidad:String(i.cantidad),minimo:String(i.minimo)}};break}
     case'iunid':ui.modal.f.unidad=v;break;
     case'okIns':guardarIns();return;
     case'borrarIns':ui.modal.borrar=true;break;
@@ -906,21 +860,16 @@ document.addEventListener('click',ev=>{
     case'okDelVenta':eliminarVenta(ui.modal.id,ui.modal.f.repone);return;
     case'hayOtra':{const p=S.productos[v];put('productos',v,{...clone(p),agotado:false});toast(`${p.nombre} disponible otra vez.`);break}
     case'respaldo':descargarRespaldo();return;
-    case'okRestaurar':{const d=ui.modal.datos;if(mode==='db'){COLS.forEach(c=>{const n=d[c]||{};Object.keys(S[c]).forEach(id=>{if(!(id in n))put(c,id,null)});Object.entries(n).forEach(([id,x])=>put(c,id,x))})}else{COLS.forEach(c=>S[c]=d[c]||{});saveLocal()}ui.modal=null;toast('Respaldo restaurado.');break}
+    case'okRestaurar':{const d=ui.modal.datos;COLS.forEach(c=>S[c]=d[c]||{});saveLocal();ui.modal=null;toast('Respaldo restaurado.');break}
   }
   render();
 });
 document.addEventListener('input',ev=>{
   const t=ev.target;
-  if(t.tagName==='INPUT'&&(t.inputMode==='decimal'||t.inputMode==='numeric')){
-    let v=t.value.replace(/,/g,'.').replace(t.inputMode==='numeric'?/[^0-9]/g:/[^0-9.]/g,'');
-    const i=v.indexOf('.'); if(i>=0)v=v.slice(0,i+1)+v.slice(i+1).replace(/\./g,'');
-    if(v!==t.value){const pos=Math.max(0,(t.selectionStart||v.length)-(t.value.length-v.length));t.value=v;try{t.setSelectionRange(pos,pos)}catch(_){}}
-  }
-  if(t.dataset.in==='fidEmail'||t.dataset.in==='fidPass'){ui[t.dataset.in]=t.value;return}
   if(t.dataset.in){ui[t.dataset.in]=t.value;render();return}
+  if(t.dataset.ctm&&ui.modal){ui.modal.f.ct[t.dataset.ctm]=clean(t.value);render();return}
   if(t.dataset.mfc&&ui.modal){ui.modal.f[t.dataset.mfc]=t.checked;render();return}
-  if(t.dataset.mf&&ui.modal){ui.modal.f[t.dataset.mf]=t.value;if(t.dataset.live!==undefined)render();return}
+  if(t.dataset.mf&&ui.modal){ui.modal.f[t.dataset.mf]=t.inputMode==='decimal'||t.inputMode==='numeric'?clean(t.value):t.value;render();return}
 });
 document.addEventListener('change',ev=>{
   const t=ev.target;
@@ -928,13 +877,12 @@ document.addEventListener('change',ev=>{
   if(t.dataset.agot){const p=S.productos[t.dataset.agot];if(p){put('productos',t.dataset.agot,{...clone(p),agotado:t.checked});render();toast(t.checked?`${p.nombre} marcado como agotado. Ya no se puede pedir.`:`${p.nombre} disponible otra vez.`,t.checked?'warn':'')}return}
   if(t.dataset.qty){setQty(ui.mesa,t.dataset.qty,t.value);return}
   if(t.dataset.nota){const m=mesa(ui.mesa);const it=m.items.find(i=>i.pid===t.dataset.nota);if(it){const n=t.value.trim();if(n)it.nota=n;else delete it.nota;put('mesas',ui.mesa,m);render()}return}
-  if(t.dataset.neg==='pin'){const val=t.value.trim();if(!/^\d{4}$/.test(val)){toast('El PIN debe tener exactamente 4 números.','bad');return}put('config','negocio',{...neg(),pin:val});encolar({t:'pin',pin:val});render();toast(fb.user?'PIN del cajero guardado.':'PIN guardado aquí. Inicia sesión para activarlo en las tarjetas.');return}
   if(t.dataset.neg){const N=neg();let val=t.value.trim();if(t.dataset.neg==='serie')val=val.toUpperCase()||'B001';if(t.dataset.neg==='nombre')val=val||'Mi negocio';put('config','negocio',{...N,[t.dataset.neg]:val});render();toast('Datos del negocio guardados.')}
 });
 document.addEventListener('keydown',ev=>{
-  if(ev.key==='Escape'&&ui.modal&&ui.modal.k!=='migrar'){ui.modal=null;render()}
-  if(ev.key==='Enter'&&ev.target.id==='apertura')abrirCaja();
-  if(ev.key==='Enter'&&ev.target.id==='fid-pass')entrarFid();
+  if(ev.key==='Escape'&&ui.modal){ui.modal=null;render()}
+  if(ev.key==='Enter'&&ev.target.id==='apertura'){ev.preventDefault();abrirCaja();return}
+  if(ev.key==='Enter'&&ui.modal&&ev.target.tagName==='INPUT'&&ev.target.type!=='checkbox'){const ok=document.querySelector('.modal [data-act^="ok"]:not([disabled]):not([data-act=okBorrar]):not([data-act=okBorrarIns]):not([data-act=okDelVenta]):not([data-act=okDelEgr]):not([data-act=okCancelarPed]):not([data-act=okAnular])');if(ok){ev.preventDefault();ev.target.dispatchEvent(new Event('change',{bubbles:true}));setTimeout(()=>ok.click(),0)}}
 });
 init();
 })();
