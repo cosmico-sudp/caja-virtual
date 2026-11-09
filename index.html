@@ -268,7 +268,7 @@ async function flush(k,col,id){
   const q=wq[k]; q.busy=true;
   while(q.job){const j=q.job;q.job=null;const ref=db.collection(col).doc(id);
     try{ j.data===null?await ref.delete():await ref.set(j.data) }
-    catch(e){ toast(e&&e.code==='quota_exceeded'?'Se llenó el espacio de datos. Borra ventas antiguas para seguir.':'No se pudo guardar el cambio. Revisa tu conexión.','bad') } }
+    catch(e){ console.error(e); toast(e&&e.code==='resource-exhausted'?'Se llegó al límite gratis de Firebase por hoy. Los cambios se guardan en este equipo.':e&&e.code==='permission-denied'?'Firebase no dejó guardar el cambio. Revisa que las reglas estén publicadas y que la sesión siga iniciada.':'No se pudo guardar el cambio. Revisa tu conexión.','bad') } }
   q.busy=false;
 }
 async function init(){
@@ -338,7 +338,7 @@ async function enviarFid(){
       else if(op.t==='pin') await fb.db.collection('privado').doc('pin').set({pin:op.pin});
       q=colaFid();q.shift();guardarCola(q);
     }
-  }catch(e){console.error(e);toast('No se pudieron enviar los códigos de fidelidad. Se reintentará solo.','warn')}
+  }catch(e){console.error(e);if(navigator.onLine)toast('No se pudieron enviar los códigos de fidelidad. Se reintentará solo.','warn')}
   fb.enviando=false;render();
 }
 /* ---------- sincronización entre equipos ---------- */
@@ -419,7 +419,7 @@ function setQty(mid,pid,n){
 }
 function completar(mid,metodo,recibido){
   if(!caja().abierta){toast('Abre la caja para cobrar.','warn');return}
-  const m=mesa(mid); if(!m.items.length&&!m.ventaPendiente)return;
+  const m=mesa(mid); if(!m.items.length&&!m.ventaPendiente){ui.modal=null;render();toast('Esta mesa ya no tiene pedido. Puede que se haya cobrado desde otro equipo.','warn');return}
   const id=m.ventaPendiente||emitir(mid,false); if(!id)return;
   confirmarPago(id,metodo,recibido);
   ui.modal={k:'boleta',id}; ui.mside='productos'; render();
@@ -625,7 +625,7 @@ function vVentas(){
   if(ui.vf==='caja')vs=c.abierta?vs.filter(v=>v.cajaId===c.id):[];
   if(ui.vf==='hoy')vs=vs.filter(v=>new Date(v.fecha).toDateString()===hoy);
   const pag=vs.filter(v=>v.estado==='pagada'), pen=vs.filter(v=>v.estado==='pendiente');
-  let h=`<div class="row"><h2>Ventas y boletas</h2><span class="spacer"></span><div class="chips">${[['caja','Caja actual'],['hoy','Hoy'],['todas','Todas']].map(([k,l])=>`<button class="chip" data-act="vf" data-v="${k}" aria-pressed="${ui.vf===k}">${l}</button>`).join('')}</div></div>
+  let h=`<div class="row"><h2>Ventas y boletas</h2><span class="spacer"></span><div class="chips">${[['caja','Caja actual'],['hoy','Hoy'],['todas',mode==='db'?'Últimos 30 días':'Todas']].map(([k,l])=>`<button class="chip" data-act="vf" data-v="${k}" aria-pressed="${ui.vf===k}">${l}</button>`).join('')}</div></div>
   <div class="stats"><div class="stat hero"><span class="lbl">Cobrado</span><b>${money(pag.reduce((a,v)=>a+v.total,0))}</b></div>
    <div class="stat"><span class="lbl">Boletas pagadas</span><b>${pag.length}</b></div>
    <div class="stat"><span class="lbl">Pendientes de pago</span><b style="color:${pen.length?'var(--warn)':'inherit'}">${pen.length} · ${money(pen.reduce((a,v)=>a+v.total,0))}</b></div>
@@ -642,7 +642,7 @@ function vCaja(){
   const c=caja(), N=neg(); let h='';
   if(!c.abierta){
     h+=`<div class="row"><h2>Caja</h2></div><section class="panel" style="max-width:520px"><h3>Abrir caja</h3><p class="muted" style="margin:0">Cuenta el efectivo con el que empiezas el día (sencillo para dar vuelto) y escríbelo aquí.</p>
-    <div class="field"><label for="apertura">Monto inicial en efectivo (S/)</label><input class="in mono" id="apertura" type="number" min="0" step="0.10" placeholder="0.00" inputmode="decimal"></div>
+    <div class="field"><label for="apertura">Monto inicial en efectivo (S/)</label><input class="in mono" id="apertura" type="text" min="0" step="0.10" placeholder="0.00" inputmode="decimal"></div>
     <button class="btn primary big" data-act="abrirCaja">Abrir caja</button></section>`;
   }else{
     const r=resumenCaja(c.id); const esperado=c.apertura+r.por.Efectivo-r.egEfe;
@@ -739,7 +739,7 @@ function modalView(){
     b=`<h2>Confirmar pago</h2><p class="muted" style="margin:0">Boleta ${numBoleta(v)} · ${esc(v.mesa)}</p>
     <div class="bigtotal"><span class="lbl">Total a cobrar</span><b>${money(v.total)}</b></div>
     <div class="field"><label>Método de pago</label><div class="seg">${METODOS.map(m=>`<button data-act="metodo" data-v="${m}" aria-pressed="${f.metodo===m}">${m}</button>`).join('')}</div></div>
-    ${f.metodo==='Efectivo'?`<div class="field"><label for="recibido">Recibido del cliente (S/)</label><input class="in mono" id="recibido" type="number" min="0" step="0.10" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${v.total.toFixed(2)}"></div>
+    ${f.metodo==='Efectivo'?`<div class="field"><label for="recibido">Recibido del cliente (S/)</label><input class="in mono" id="recibido" type="text" min="0" step="0.10" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${v.total.toFixed(2)}"></div>
     <div class="chips">${quick.map(x=>`<button class="chip" data-act="rec" data-v="${x}">${x===v.total?'Exacto':money(x)}</button>`).join('')}</div>
     <div class="vuelto ${f.recibido===''?'idle':vuelto<0?'falta':''}"><span class="lbl" style="color:inherit">${f.recibido!==''&&vuelto<0?'Falta':'Vuelto'}</span><b>${f.recibido===''?'—':money(Math.abs(vuelto))}</b></div>`:`<p class="muted" style="margin:0">Verifica que el pago por ${esc(f.metodo)} haya llegado antes de confirmar.</p>`}
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Cancelar</button><button class="btn primary" style="flex:2" data-act="okPago" ${f.metodo==='Efectivo'&&f.recibido!==''&&vuelto<0?'disabled':''}>Confirmar pago</button></div>`}
@@ -752,7 +752,7 @@ function modalView(){
     <div class="mini-list">${items.map(i=>`<div><span>${i.cant} × ${esc(i.nombre)}</span><span class="mono">${money(i.precio*i.cant)}</span></div>`).join('')}</div>
     <div class="bigtotal"><span class="lbl">Total a cobrar</span><b>${money(total)}</b></div>
     <div class="field"><label>¿Cómo paga?</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${f.metodo===x}">${x}</button>`).join('')}</div></div>
-    ${efe?`<div class="field"><label for="recibido">¿Con cuánto paga? (S/)</label><input class="in mono" id="recibido" type="number" min="0" step="0.10" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${total.toFixed(2)}" style="font-size:20px;padding:12px"></div>
+    ${efe?`<div class="field"><label for="recibido">¿Con cuánto paga? (S/)</label><input class="in mono" id="recibido" type="text" min="0" step="0.10" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${total.toFixed(2)}" style="font-size:20px;padding:12px"></div>
     <div class="chips">${quick.map(x=>`<button class="chip" data-act="rec" data-v="${x}">${x===total?'Exacto':money(x)}</button>`).join('')}</div>
     <div class="vuelto ${f.recibido===''?'idle':falta?'falta':''}"><span class="lbl" style="color:inherit">${falta?'Falta':'Vuelto'}</span><b>${f.recibido===''?'—':money(Math.abs(vu))}</b></div>`
     :`<p class="muted" style="margin:0">Verifica que el pago por ${esc(f.metodo)} haya llegado antes de confirmar.</p>`}
@@ -766,21 +766,21 @@ function modalView(){
     b=`<h2>${M.id?'Editar insumo':'Nuevo insumo'}</h2>
     <div class="field"><label for="if-nombre">Nombre</label><input class="in" id="if-nombre" data-mf="nombre" value="${esc(f.nombre)}" placeholder="Ej. Azúcar, vasos 12 oz, balón de gas"></div>
     <div class="field"><label>Unidad</label><div class="seg">${UNIDADES.map(u=>`<button data-act="iunid" data-v="${u}" aria-pressed="${f.unidad===u}">${u}</button>`).join('')}</div></div>
-    <div class="grid2"><div class="field"><label for="if-cant">Cantidad que tienes (${esc(f.unidad)})</label><input class="in mono" id="if-cant" type="number" min="0" step="any" inputmode="decimal" data-mf="cantidad" value="${esc(f.cantidad)}"></div>
-    <div class="field"><label for="if-min">Avisarme cuando queden</label><input class="in mono" id="if-min" type="number" min="0" step="any" inputmode="decimal" data-mf="minimo" value="${esc(f.minimo)}"></div></div>
+    <div class="grid2"><div class="field"><label for="if-cant">Cantidad que tienes (${esc(f.unidad)})</label><input class="in mono" id="if-cant" type="text" min="0" step="any" inputmode="decimal" data-mf="cantidad" value="${esc(f.cantidad)}"></div>
+    <div class="field"><label for="if-min">Avisarme cuando queden</label><input class="in mono" id="if-min" type="text" min="0" step="any" inputmode="decimal" data-mf="minimo" value="${esc(f.minimo)}"></div></div>
     ${M.borrar?`<div class="banner bad"><span>¿Borrar ${esc(f.nombre)}? No se puede deshacer.</span><button class="btn sm danger" data-act="okBorrarIns">Sí, borrar</button></div>`:''}
     <div class="row">${M.id&&!M.borrar?`<button class="btn danger" data-act="borrarIns">Borrar</button>`:''}<span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okIns">Guardar</button></div>`}
   if(M.k==='insMov'){const i=S.insumos[M.id];if(!i)return'';const usar=M.tipo==='usar';const q=Number(M.f.cant)||0;const tiene=Number(i.cantidad)||0;const queda=usar?Math.max(0,tiene-q):tiene+q;
     b=`<h2>${usar?'Usar':'Reponer'} ${esc(i.nombre)}</h2><p class="muted" style="margin:0">Tienes <b class="mono">${fmtCant(tiene,i.unidad)}</b>. Te avisa cuando queden ${fmtCant(i.minimo,i.unidad)}.</p>
-    <div class="field"><label for="im-cant">${usar?'Cantidad que usaste':'Cantidad que compraste'} (${esc(i.unidad)})</label><input class="in mono" id="im-cant" type="number" min="0" step="any" inputmode="decimal" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
+    <div class="field"><label for="im-cant">${usar?'Cantidad que usaste':'Cantidad que compraste'} (${esc(i.unidad)})</label><input class="in mono" id="im-cant" type="text" min="0" step="any" inputmode="decimal" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
     ${q>0?`<p class="muted" style="margin:0">Quedarás con <b class="mono">${fmtCant(queda,i.unidad)}</b>${usar&&q>tiene?'. Estás usando más de lo registrado; quedará en 0':''}.</p>`:''}
-    ${usar?'':`<div class="field"><label for="im-costo">¿Cuánto pagaste? (S/, opcional)</label><input class="in mono" id="im-costo" type="number" min="0" step="0.10" inputmode="decimal" data-mf="costo" value="${esc(M.f.costo)}" data-live placeholder="0.00"></div>
+    ${usar?'':`<div class="field"><label for="im-costo">¿Cuánto pagaste? (S/, opcional)</label><input class="in mono" id="im-costo" type="text" min="0" step="0.10" inputmode="decimal" data-mf="costo" value="${esc(M.f.costo)}" data-live placeholder="0.00"></div>
     ${Number(M.f.costo)>0?`<div class="field"><label>Pagado con</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${M.f.metodo===x}">${x}</button>`).join('')}</div></div><p class="note" style="text-align:left;margin:0">Se registra también como egreso en la categoría Insumos.</p>`:''}`}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okInsMov" ${q>0?'':'disabled'}>${usar?'Descontar':'Agregar'}</button></div>`}
   if(M.k==='egr'){const f=M.f;
     b=`<h2>Registrar egreso</h2>
     <div class="field"><label for="ef-desc">¿En qué se gastó?</label><input class="in" id="ef-desc" data-mf="descripcion" value="${esc(f.descripcion)}" placeholder="Ej. Pago de luz, compra de pan, sueldo"></div>
-    <div class="field"><label for="ef-monto">Monto (S/)</label><input class="in mono" id="ef-monto" type="number" min="0" step="0.10" inputmode="decimal" data-mf="monto" value="${esc(f.monto)}" placeholder="0.00" style="font-size:20px;padding:12px"></div>
+    <div class="field"><label for="ef-monto">Monto (S/)</label><input class="in mono" id="ef-monto" type="text" min="0" step="0.10" inputmode="decimal" data-mf="monto" value="${esc(f.monto)}" placeholder="0.00" style="font-size:20px;padding:12px"></div>
     <div class="field"><label>Categoría</label><div class="chips">${EGCATS.map(c=>`<button class="chip" data-act="ecat" data-v="${c}" aria-pressed="${f.categoria===c}">${c}</button>`).join('')}</div></div>
     <div class="field"><label>Pagado con</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${f.metodo===x}">${x}</button>`).join('')}</div></div>
     ${f.metodo==='Efectivo'?`<p class="note" style="text-align:left;margin:0">${caja().abierta?'Se descuenta del efectivo esperado en la caja abierta.':'La caja está cerrada: el egreso se registra, pero no entra en ningún cierre.'}</p>`:''}
@@ -807,15 +807,15 @@ function modalView(){
     b=`<h2>${M.id?'Editar producto':'Nuevo producto'}</h2>
     <div class="field"><label for="pf-nombre">Nombre</label><input class="in" id="pf-nombre" data-mf="nombre" value="${esc(f.nombre)}" placeholder="Ej. Chicha morada 1 L"></div>
     <div class="grid2"><div class="field"><label for="pf-cat">Categoría</label><input class="in" id="pf-cat" list="cats" data-mf="categoria" value="${esc(f.categoria)}" placeholder="Bebidas"><datalist id="cats">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
-    <div class="field"><label for="pf-precio">Precio de venta (S/)</label><input class="in mono" id="pf-precio" type="number" min="0" step="0.10" inputmode="decimal" data-mf="precio" value="${esc(f.precio)}"></div>
-    ${f.ilimitado?'':`<div class="field"><label for="pf-stock">Cantidad que tienes</label><input class="in mono" id="pf-stock" type="number" min="0" step="1" inputmode="numeric" data-mf="stock" value="${esc(f.stock)}"></div>
-    <div class="field"><label for="pf-min">Avisarme cuando queden</label><input class="in mono" id="pf-min" type="number" min="0" step="1" inputmode="numeric" data-mf="minimo" value="${esc(f.minimo)}"></div>`}</div>
+    <div class="field"><label for="pf-precio">Precio de venta (S/)</label><input class="in mono" id="pf-precio" type="text" min="0" step="0.10" inputmode="decimal" data-mf="precio" value="${esc(f.precio)}"></div>
+    ${f.ilimitado?'':`<div class="field"><label for="pf-stock">Cantidad que tienes</label><input class="in mono" id="pf-stock" type="text" min="0" step="1" inputmode="numeric" data-mf="stock" value="${esc(f.stock)}"></div>
+    <div class="field"><label for="pf-min">Avisarme cuando queden</label><input class="in mono" id="pf-min" type="text" min="0" step="1" inputmode="numeric" data-mf="minimo" value="${esc(f.minimo)}"></div>`}</div>
     <label class="check"><input type="checkbox" id="pf-ilim" data-mfc="ilimitado" ${f.ilimitado?'checked':''}><span><b>Stock ilimitado</b><br><span class="muted" style="font-size:13px">Para platos que se preparan o cosas que no cuentas. No se descuenta nada; solo marcas cuando se acabe.</span></span></label>
     ${f.ilimitado?`<label class="check"><input type="checkbox" id="pf-agot" data-mfc="agotado" ${f.agotado?'checked':''}><span><b>Se acabó por ahora</b><br><span class="muted" style="font-size:13px">No se podrá agregar a las mesas hasta que lo desmarques.</span></span></label>`:''}
     ${M.borrar?`<div class="banner bad"><span>¿Borrar ${esc(f.nombre)}? Las boletas anteriores no cambian.</span><button class="btn sm danger" data-act="okBorrar">Sí, borrar</button></div>`:''}
     <div class="row">${M.id&&!M.borrar?`<button class="btn danger" data-act="borrarProd">Borrar</button>`:''}<span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okProd">Guardar</button></div>`}
   if(M.k==='reponer'){const p=S.productos[M.id];if(!p)return'';b=`<h2>Reponer ${esc(p.nombre)}</h2><p class="muted" style="margin:0">Tienes <b class="mono">${p.stock}</b>. Te avisa cuando queden ${p.minimo} o menos.</p>
-    <div class="field"><label for="rep">Cantidad que ingresa</label><input class="in mono" id="rep" type="number" min="1" step="1" inputmode="numeric" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
+    <div class="field"><label for="rep">Cantidad que ingresa</label><input class="in mono" id="rep" type="text" min="1" step="1" inputmode="numeric" data-mf="cant" value="${esc(M.f.cant)}" data-live></div>
     ${Number(M.f.cant)>0?`<p class="muted" style="margin:0">Quedarás con <b class="mono">${(Number(p.stock)||0)+Math.floor(Number(M.f.cant))}</b>.</p>`:''}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okReponer" ${Number(M.f.cant)>0?'':'disabled'}>Agregar al stock</button></div>`}
   if(M.k==='cerrar'){const c=caja();const r=resumenCaja(c.id);const esp=c.apertura+r.por.Efectivo-r.egEfe;const ct=M.f.contado;const d=Math.round(((Number(ct)||0)-esp)*100)/100;wide='wide';
@@ -823,7 +823,7 @@ function modalView(){
     <div class="stats" style="grid-template-columns:1fr 1fr"><div class="stat hero"><span class="lbl">Vendido</span><b>${money(r.cobrado)}</b>${r.eg?`<span style="font-size:13px;opacity:.85">Ganancia ${money(r.cobrado-r.eg)}</span>`:''}</div><div class="stat"><span class="lbl">Efectivo esperado</span><b>${money(esp)}</b></div></div>
     <div class="muted" style="font-size:13.5px">${money(c.apertura)} inicial + ${money(r.por.Efectivo)} en ventas en efectivo${r.egEfe?` − ${money(r.egEfe)} de egresos en efectivo`:''} · ${METODOS.filter(m=>m!=='Efectivo'&&r.por[m]).map(m=>`${m} ${money(r.por[m])}`).join(' · ')||'sin pagos digitales'}</div>
     ${r.pend.length?`<div class="banner warn">Quedan ${r.pend.length} boleta${r.pend.length===1?'':'s'} sin cobrar. No se suman al cierre.</div>`:''}
-    <div class="field"><label for="contado">Efectivo que contaste en caja (S/)</label><input class="in mono" id="contado" type="number" min="0" step="0.10" inputmode="decimal" data-mf="contado" value="${esc(ct)}" data-live placeholder="${esp.toFixed(2)}"></div>
+    <div class="field"><label for="contado">Efectivo que contaste en caja (S/)</label><input class="in mono" id="contado" type="text" min="0" step="0.10" inputmode="decimal" data-mf="contado" value="${esc(ct)}" data-live placeholder="${esp.toFixed(2)}"></div>
     ${ct!==''?`<div class="diff ${d===0?'ok':d>0?'warn':'bad'}"><span>${d===0?'La caja cuadra':d>0?'Sobra':'Falta'}</span><span class="mono">${money(Math.abs(d))}</span></div>`:''}
     <div class="row"><span class="spacer"></span><button class="btn" data-act="cerrarModal">Cancelar</button><button class="btn primary" data-act="okCerrar" ${ct===''?'disabled':''}>Cerrar caja</button></div>`}
   if(M.k==='alertas'){const al=alertas(),ai=alertasIns();
@@ -834,14 +834,15 @@ function modalView(){
 /* ---------- render ---------- */
 function render(){
   const a=document.activeElement, id=a&&a.id; let s=null,e=null; try{s=a.selectionStart;e=a.selectionEnd}catch(_){}
+  const val=a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA')&&a.type!=='checkbox'&&a.type!=='file'?a.value:null;
   $('top').innerHTML=topView(); $('app').innerHTML=view(); $('modal').innerHTML=modalView();
-  if(id){const el=$(id);if(el&&el!==document.activeElement){el.focus();try{if(s!=null)el.setSelectionRange(s,e)}catch(_){}}}
+  if(id){const el=$(id);if(el&&el!==document.activeElement){if(val!==null&&el.tagName===a.tagName&&el.value!==val)el.value=val;el.focus();try{const n=(el.value||'').length;el.setSelectionRange(s!=null?s:n,e!=null?e:n)}catch(_){}}}
 }
 function toast(msg,kind){const t=document.createElement('div');t.className='toast '+(kind||'');t.textContent=msg;$('toasts').appendChild(t);setTimeout(()=>t.remove(),kind?5200:3200)}
 
 document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-act]'); if(!b)return; const act=b.dataset.act, v=b.dataset.v;
-  if(act==='ov'){if(ev.target===b){ui.modal=null;render()}return}
+  if(act==='ov'){if(ev.target===b&&ui.modal?.k!=='migrar'){ui.modal=null;render()}return}
   switch(act){
     case'tab':ui.tab=v;ui.modal=null;break;
     case'mesa':ui.mesa=v;ui.mside=(S.mesas[v]?.items||[]).length?'pedido':'productos';break;
@@ -911,6 +912,11 @@ document.addEventListener('click',ev=>{
 });
 document.addEventListener('input',ev=>{
   const t=ev.target;
+  if(t.tagName==='INPUT'&&(t.inputMode==='decimal'||t.inputMode==='numeric')){
+    let v=t.value.replace(/,/g,'.').replace(t.inputMode==='numeric'?/[^0-9]/g:/[^0-9.]/g,'');
+    const i=v.indexOf('.'); if(i>=0)v=v.slice(0,i+1)+v.slice(i+1).replace(/\./g,'');
+    if(v!==t.value){const pos=Math.max(0,(t.selectionStart||v.length)-(t.value.length-v.length));t.value=v;try{t.setSelectionRange(pos,pos)}catch(_){}}
+  }
   if(t.dataset.in==='fidEmail'||t.dataset.in==='fidPass'){ui[t.dataset.in]=t.value;return}
   if(t.dataset.in){ui[t.dataset.in]=t.value;render();return}
   if(t.dataset.mfc&&ui.modal){ui.modal.f[t.dataset.mfc]=t.checked;render();return}
@@ -926,7 +932,7 @@ document.addEventListener('change',ev=>{
   if(t.dataset.neg){const N=neg();let val=t.value.trim();if(t.dataset.neg==='serie')val=val.toUpperCase()||'B001';if(t.dataset.neg==='nombre')val=val||'Mi negocio';put('config','negocio',{...N,[t.dataset.neg]:val});render();toast('Datos del negocio guardados.')}
 });
 document.addEventListener('keydown',ev=>{
-  if(ev.key==='Escape'&&ui.modal){ui.modal=null;render()}
+  if(ev.key==='Escape'&&ui.modal&&ui.modal.k!=='migrar'){ui.modal=null;render()}
   if(ev.key==='Enter'&&ev.target.id==='apertura')abrirCaja();
   if(ev.key==='Enter'&&ev.target.id==='fid-pass')entrarFid();
 });
