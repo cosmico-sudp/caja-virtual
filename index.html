@@ -216,6 +216,27 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .stamp{display:inline-block;border:2px solid currentColor;padding:2px 10px;border-radius:4px;font-weight:600;letter-spacing:.1em;transform:rotate(-3deg);margin:8px 0}
 .stamp.paid{color:#1c7445} .stamp.pend{color:#975400} .stamp.void{color:#b3261e}
 .receipt small{display:block;font-size:10.5px;color:#6b675c;margin-top:10px;text-align:center}
+/* Impresión en ticketera térmica */
+#print-area{position:fixed;left:-9999px;top:0;background:#fff;color:#000;visibility:hidden}
+#print-area .receipt{background:#fff;color:#000;border:0;border-radius:0;padding:0;font-size:12px;line-height:1.35}
+#print-area.p58 .receipt{font-size:10.5px}
+#print-area .receipt .h{font-size:15px}
+#print-area.p58 .receipt .h{font-size:13px}
+#print-area .receipt hr{border-top:1px dashed #000}
+#print-area .receipt small,#print-area .receipt span[style]{color:#000!important}
+#print-area .stamp{color:#000!important;border-color:#000;transform:none}
+#print-area .receipt .it{grid-template-columns:22px minmax(0,1fr) auto}
+#print-area.p58 .receipt .it{grid-template-columns:14px minmax(0,1fr) auto;gap:3px}
+#print-area .receipt .it span span{white-space:nowrap}
+#print-area.p58 .receipt{letter-spacing:-.02em}
+.printset{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+@media print{
+  :root{padding:0!important;background:#fff!important}
+  body{background:#fff!important}
+  body::before{display:none!important}
+  body>*:not(#print-area){display:none!important}
+  #print-area{position:static;visibility:visible;left:auto}
+}
 
 .toasts{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:30;display:flex;flex-direction:column;gap:8px;width:min(440px,calc(100% - 32px))}
 .toast{background:var(--ink);color:var(--bg);padding:11px 14px;border-radius:12px;box-shadow:var(--shadow);font-weight:500;animation:up .2s ease-out}
@@ -231,6 +252,7 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 <main><div class="wrap" id="app"></div></main>
 <div id="modal"></div>
 <div class="toasts" id="toasts" aria-live="polite"></div>
+<div id="print-area" aria-hidden="true"></div>
 
 <script>
 (function(){
@@ -330,12 +352,25 @@ function setQty(mid,pid,n){
   if(!m.items.length)m.abiertaEn=null;
   put('mesas',mid,m);render();
 }
+function puedeImprimir(){return mode!=='db'}
+function imprimir(id){
+  const v=S.ventas[id]; if(!v)return;
+  if(!puedeImprimir()){toast('Dentro de Claude no se puede imprimir. Abre tu página de GitHub para imprimir boletas.','warn');return}
+  const N=neg(), w=N.papel==='58'?58:80, cw=w===58?48:72;
+  const pa=$('print-area'); pa.className=w===58?'p58':''; pa.style.width=cw+'mm'; pa.style.padding='0 '+((w-cw)/2)+'mm';
+  pa.innerHTML=receipt(v)+(N.pie?`<div style="text-align:center;font-family:var(--f-mono);font-size:${w===58?10:11}px;margin-top:6px">${esc(N.pie)}</div>`:'');
+  const hmm=Math.ceil(pa.scrollHeight*25.4/96)+8;
+  let st=$('print-page'); if(!st){st=document.createElement('style');st.id='print-page';document.head.appendChild(st)}
+  st.textContent=`@page{size:${w}mm ${hmm}mm;margin:0}`;
+  setTimeout(()=>{try{window.print()}catch(e){toast('Este navegador no permite imprimir desde aquí.','bad')}},60);
+}
 function completar(mid,metodo,recibido){
   if(!caja().abierta){toast('Abre la caja para cobrar.','warn');return}
   const m=mesa(mid); if(!m.items.length&&!m.ventaPendiente)return;
   const id=m.ventaPendiente||emitir(mid,false); if(!id)return;
   confirmarPago(id,metodo,recibido);
   ui.modal={k:'boleta',id}; ui.mside='productos'; render();
+  if(neg().autoImprimir&&puedeImprimir()&&S.ventas[id]?.estado==='pagada')setTimeout(()=>imprimir(id),250);
 }
 function eliminarVenta(id,repone){
   const v=S.ventas[id]; if(!v)return;
@@ -609,6 +644,11 @@ function vCaja(){
    <div class="field"><label for="neg-dir">Dirección</label><input class="in" id="neg-dir" data-neg="direccion" value="${esc(N.direccion)}"></div>
    <div class="field"><label for="neg-serie">Serie de boleta</label><input class="in mono" id="neg-serie" data-neg="serie" value="${esc(N.serie)}"></div></div>
    <p class="note" style="text-align:left;margin:0">Próxima boleta: <span class="mono">${esc(N.serie)}-${String(N.siguiente).padStart(8,'0')}</span></p></section>`;
+  h+=`<section class="panel" style="max-width:640px"><h3>Impresora de boletas</h3>
+   <div class="field"><label>Ancho del papel de tu ticketera</label><div class="seg" style="max-width:260px"><button data-act="papel" data-v="58" aria-pressed="${N.papel==='58'}">58 mm</button><button data-act="papel" data-v="80" aria-pressed="${N.papel!=='58'}">80 mm</button></div></div>
+   <div class="field"><label for="neg-pie">Mensaje al final de la boleta (opcional)</label><input class="in" id="neg-pie" data-neg="pie" value="${esc(N.pie||'')}" placeholder="¡Gracias por su compra!"></div>
+   <label class="check"><input type="checkbox" id="neg-auto" data-negc="autoImprimir" ${N.autoImprimir?'checked':''}><span><b>Imprimir automáticamente al cobrar</b><br><span class="muted" style="font-size:13px">Al tocar "Cobrar y emitir boleta" se abre la impresión enseguida.</span></span></label>
+   ${puedeImprimir()?`<div class="printset"><button class="btn" data-act="probarImp">Imprimir boleta de prueba</button><span class="note">Úsala para revisar el tamaño la primera vez.</span></div>`:'<p class="note" style="text-align:left;margin:0">Dentro de Claude no se puede imprimir. Las boletas se imprimen desde tu página de GitHub.</p>'}</section>`;
   return h;
 }
 
@@ -661,7 +701,7 @@ function modalView(){
   const M=ui.modal; if(!M)return'';
   let b='', wide='';
   if(M.k==='boleta'){const v=S.ventas[M.id];if(!v)return'';
-    b=`${receipt(v)}<div class="row">${v.estado==='pendiente'?`<button class="btn primary" style="flex:1" data-act="pagar" data-v="${M.id}">Confirmar pago</button>`:''}<button class="btn" style="flex:1" data-act="copiar" data-v="${M.id}">Copiar texto</button><button class="btn" style="flex:1" data-act="cerrarModal">Cerrar</button></div>`}
+    b=`${receipt(v)}<div class="row">${v.estado==='pendiente'?`<button class="btn primary" style="flex:1" data-act="pagar" data-v="${M.id}">Confirmar pago</button>`:''}${puedeImprimir()?`<button class="btn primary" style="flex:1" data-act="imprimir" data-v="${M.id}">Imprimir</button>`:''}<button class="btn" style="flex:1" data-act="copiar" data-v="${M.id}">Copiar texto</button><button class="btn" style="flex:1" data-act="cerrarModal">Cerrar</button></div>${puedeImprimir()?'':'<p class="note" style="margin:0">Para imprimir, abre tu página de GitHub. Dentro de Claude no se puede imprimir.</p>'}`}
   if(M.k==='pago'){const v=S.ventas[M.id];if(!v)return'';const f=M.f;const rec=Number(f.recibido)||0;const vuelto=rec-v.total;
     const quick=[...new Set([v.total,...[10,20,50,100,200].filter(x=>x>v.total)])].slice(0,5);
     b=`<h2>Confirmar pago</h2><p class="muted" style="margin:0">Boleta ${numBoleta(v)} · ${esc(v.mesa)}</p>
@@ -840,6 +880,9 @@ document.addEventListener('click',ev=>{
     case'alertas':ui.modal={k:'alertas'};break;
     case'copiar':{const t=receiptText(S.ventas[v]);try{navigator.clipboard.writeText(t).then(()=>toast('Boleta copiada.'),()=>toast('No se pudo copiar en este navegador.','warn'))}catch(_){toast('No se pudo copiar en este navegador.','warn')}return}
     case'cerrarModal':ui.modal=null;break;
+    case'imprimir':imprimir(v);return;
+    case'papel':put('config','negocio',{...neg(),papel:v});toast(`Papel de ${v} mm guardado.`);break;
+    case'probarImp':{const N=neg();const id='__prueba';S.ventas={...S.ventas,[id]:{serie:N.serie,numero:0,fecha:new Date().toISOString(),mesa:'Prueba',items:[{nombre:'Producto de prueba',precio:10,cant:2},{nombre:'Otro producto con nombre largo',precio:4.5,cant:1}],total:24.5,estado:'pagada',metodo:'Efectivo',recibido:30,vuelto:5.5}};imprimir(id);const n={...S.ventas};delete n[id];S.ventas=n;return}
     case'ef':ui.ef=v;break;
     case'nuevoIns':ui.modal={k:'ins',id:null,f:{nombre:'',unidad:'unid',cantidad:'',minimo:''}};break;
     case'editIns':{const i=S.insumos[v];ui.modal={k:'ins',id:v,f:{nombre:i.nombre,unidad:i.unidad==='unid.'?'unid':i.unidad,cantidad:String(i.cantidad),minimo:String(i.minimo)}};break}
@@ -877,6 +920,7 @@ document.addEventListener('change',ev=>{
   if(t.dataset.agot){const p=S.productos[t.dataset.agot];if(p){put('productos',t.dataset.agot,{...clone(p),agotado:t.checked});render();toast(t.checked?`${p.nombre} marcado como agotado. Ya no se puede pedir.`:`${p.nombre} disponible otra vez.`,t.checked?'warn':'')}return}
   if(t.dataset.qty){setQty(ui.mesa,t.dataset.qty,t.value);return}
   if(t.dataset.nota){const m=mesa(ui.mesa);const it=m.items.find(i=>i.pid===t.dataset.nota);if(it){const n=t.value.trim();if(n)it.nota=n;else delete it.nota;put('mesas',ui.mesa,m);render()}return}
+  if(t.dataset.negc){put('config','negocio',{...neg(),[t.dataset.negc]:t.checked});render();toast(t.checked?'Se imprimirá automáticamente al cobrar.':'Impresión automática desactivada.');return}
   if(t.dataset.neg){const N=neg();let val=t.value.trim();if(t.dataset.neg==='serie')val=val.toUpperCase()||'B001';if(t.dataset.neg==='nombre')val=val||'Mi negocio';put('config','negocio',{...N,[t.dataset.neg]:val});render();toast('Datos del negocio guardados.')}
 });
 document.addEventListener('keydown',ev=>{
