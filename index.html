@@ -215,6 +215,11 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 .receipt .tot{font-size:15px;font-weight:600}
 .stamp{display:inline-block;border:2px solid currentColor;padding:2px 10px;border-radius:4px;font-weight:600;letter-spacing:.1em;transform:rotate(-3deg);margin:8px 0}
 .stamp.paid{color:#1c7445} .stamp.pend{color:#975400} .stamp.void{color:#b3261e}
+.receipt .fid{border:1.5px dashed var(--paper-line);border-radius:6px;padding:8px 10px;margin-top:10px;text-align:center}
+.receipt .fid .lbl{font-size:10.5px;letter-spacing:.12em}
+.receipt .fid b{display:block;font-size:22px;letter-spacing:.28em;margin:2px 0 2px .28em}
+.pinrow{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+.pinrow .field{flex:1;min-width:140px}
 .receipt small{display:block;font-size:10.5px;color:#6b675c;margin-top:10px;text-align:center}
 /* Impresión en ticketera térmica */
 #print-area{position:fixed;left:-9999px;top:0;background:#fff;color:#000;visibility:hidden}
@@ -225,6 +230,8 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 #print-area .receipt hr{border-top:1px dashed #000}
 #print-area .receipt small,#print-area .receipt span[style]{color:#000!important}
 #print-area .stamp{color:#000!important;border-color:#000;transform:none}
+#print-area .receipt .fid{border-color:#000}
+#print-area .receipt .fid .lbl{color:#000}
 #print-area .receipt .it{grid-template-columns:22px minmax(0,1fr) auto}
 #print-area.p58 .receipt .it{grid-template-columns:14px minmax(0,1fr) auto;gap:3px}
 #print-area .receipt .it span span{white-space:nowrap}
@@ -254,6 +261,9 @@ tr.out td:first-child{box-shadow:inset 3px 0 0 var(--bad)}
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div id="print-area" aria-hidden="true"></div>
 
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 (function(){
 const COLS=['productos','mesas','ventas','cajas','config','insumos','egresos'];
@@ -288,7 +298,7 @@ async function flush(k,col,id){
   const q=wq[k]; q.busy=true;
   while(q.job){const j=q.job;q.job=null;const ref=db.collection(col).doc(id);
     try{ j.data===null?await ref.delete():await ref.set(j.data) }
-    catch(e){ toast(e&&e.code==='quota_exceeded'?'Se llenó el espacio de datos. Borra ventas antiguas para seguir.':'No se pudo guardar el cambio. Revisa tu conexión.','bad') } }
+    catch(e){ console.error(e); toast(e&&e.code==='resource-exhausted'?'Se llegó al límite gratis de Firebase por hoy. Los cambios se guardan en este equipo.':e&&e.code==='permission-denied'?'Firebase no dejó guardar el cambio. Revisa que las reglas estén publicadas y que la sesión siga iniciada.':'No se pudo guardar el cambio. Revisa tu conexión.','bad') } }
   q.busy=false;
 }
 async function init(){
@@ -329,6 +339,92 @@ function enMesa(mid,pid){const it=(S.mesas[mid]?.items||[]).find(i=>i.pid===pid)
 function nivel(p){if(p.ilimitado)return p.agotado?'out':'ok';const s=Number(p.stock)||0;if(s<=0)return'out';if(s<=(Number(p.minimo)||0))return'low';return'ok'}
 const alertas=()=>prods().filter(p=>nivel(p)!=='ok');
 const totalMesa=m=>(m.items||[]).reduce((a,it)=>{const p=S.productos[it.pid];return a+(p?Number(p.precio):0)*it.cant},0);
+const FID_CH='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function codigoFid(){const usados=new Set(Object.values(S.ventas).map(v=>v.codigo).filter(Boolean));let c;do{c='';for(let i=0;i<6;i++)c+=FID_CH[Math.floor(Math.random()*FID_CH.length)]}while(usados.has(c));return c}
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyDWDqJ2raFsNT6-7d6VfE28kyQOjv2O8h4",
+  authDomain:"tarjeta-virtual-bb6a8.firebaseapp.com",
+  projectId:"tarjeta-virtual-bb6a8",
+  storageBucket:"tarjeta-virtual-bb6a8.firebasestorage.app",
+  messagingSenderId:"95606922881",
+  appId:"1:95606922881:web:c085923a66fb579b4bf780"
+};
+/* ---------- tarjeta de fidelidad (Firebase) ---------- */
+const FQ=LS+'.fidCola';
+let fb={auth:null,db:null,user:null,ok:false,enviando:false};
+try{firebase.initializeApp(FIREBASE_CONFIG);fb.auth=firebase.auth();fb.db=firebase.firestore();fb.db.settings({ignoreUndefinedProperties:true,merge:true});fb.db.enablePersistence({synchronizeTabs:true}).catch(()=>{});fb.ok=true}catch(e){console.error(e)}
+function colaFid(){try{return JSON.parse(localStorage.getItem(FQ)||'[]')}catch(e){return[]}}
+function guardarCola(q){try{localStorage.setItem(FQ,JSON.stringify(q))}catch(e){}}
+function encolar(op){const q=colaFid();q.push(op);guardarCola(q);enviarFid()}
+async function enviarFid(){
+  if(!fb.ok||!fb.user||fb.enviando)return;
+  fb.enviando=true;
+  try{
+    let q=colaFid();
+    while(q.length){
+      const op=q[0];
+      if(op.t==='crear') await fb.db.collection('codigos').doc(op.c).set({estado:'disponible',boleta:op.b,total:op.total,creado:firebase.firestore.FieldValue.serverTimestamp()});
+      else if(op.t==='anular'){const ref=fb.db.collection('codigos').doc(op.c);await fb.db.runTransaction(async tx=>{const d=await tx.get(ref);if(d.exists&&d.data().estado==='disponible')tx.update(ref,{estado:'anulado'})})}
+      else if(op.t==='pin') await fb.db.collection('privado').doc('pin').set({pin:op.pin});
+      q=colaFid();q.shift();guardarCola(q);
+    }
+  }catch(e){console.error(e);if(navigator.onLine)toast('No se pudieron enviar los códigos de fidelidad. Se reintentará solo.','warn')}
+  fb.enviando=false;render();
+}
+/* ---------- sincronización entre equipos ---------- */
+let subs=[];
+const DIAS_VENTAS=30;
+function desconectarDB(){subs.forEach(f=>{try{f()}catch(e){}});subs=[];if(mode==='db'){mode='local';db=null;loadLocal();note=''}}
+async function conectarDB(){
+  try{
+    note='Conectando con los demás equipos…';render();
+    const snaps=await Promise.all(COLS.map(c=>fb.db.collection(c).limit(1).get()));
+    const vacia=snaps.every(x=>x.empty);
+    const locales=Object.keys(S.ventas).length+Object.keys(S.productos).filter(k=>!S.productos[k].ejemplo).length;
+    if(vacia&&locales){note='';ui.modal={k:'migrar'};render();return}
+    escuchar();
+  }catch(e){console.error(e);note='';toast('No se pudo conectar con los demás equipos. Revisa las reglas de Firebase y tu internet. ('+(e.code||e.message)+')','bad');render()}
+}
+function escuchar(){
+  desconectarDB(); db=fb.db; mode='db'; note='';
+  const desde=new Date(Date.now()-DIAS_VENTAS*864e5).toISOString();
+  COLS.forEach(c=>{
+    let q=db.collection(c); if(c==='ventas')q=q.where('fecha','>=',desde);
+    subs.push(q.onSnapshot(snap=>{const o={};snap.forEach(d=>o[d.id]=d.data());S[c]=o;saveLocal();render()},
+      e=>{console.error(e);toast('Se perdió la sincronización de '+c+'. ('+(e.code||e.message)+')','bad')}));
+  });
+  render();
+}
+async function migrar(){
+  ui.modal=null;note='Subiendo los datos de este equipo…';render();
+  try{
+    const ops=[];COLS.forEach(c=>Object.entries(S[c]).forEach(([id,d])=>ops.push([c,id,d])));
+    for(let i=0;i<ops.length;i+=400){const b=fb.db.batch();ops.slice(i,i+400).forEach(([c,id,d])=>b.set(fb.db.collection(c).doc(id),d));await b.commit()}
+    toast('Datos subidos. Ya puedes abrir la caja en otro equipo.');escuchar();
+  }catch(e){console.error(e);note='';toast('No se pudieron subir los datos. ('+(e.code||e.message)+')','bad');render()}
+}
+if(fb.ok){
+  fb.auth.onAuthStateChanged(u=>{fb.user=u;if(u){enviarFid();conectarDB()}else desconectarDB();if(typeof render==='function'&&$('app'))render()});
+  window.addEventListener('online',enviarFid);
+  setInterval(enviarFid,60000);
+}
+async function entrarFid(){
+  const em=(ui.fidEmail||'').trim(),pw=ui.fidPass||'';
+  if(!em||!pw){toast('Escribe el correo y la contraseña del cajero.','warn');return}
+  try{await fb.auth.signInWithEmailAndPassword(em,pw);ui.fidPass='';toast('Sesión iniciada. Los códigos ya se registran.');
+    const N=neg();if(/^\d{4}$/.test(N.pin||''))encolar({t:'pin',pin:N.pin});}
+  catch(e){console.error(e);const M={
+    'auth/network-request-failed':'Sin conexión. Revisa tu internet.',
+    'auth/invalid-credential':'Correo o contraseña incorrectos, o ese usuario no existe en Firebase → Authentication → Usuarios.',
+    'auth/wrong-password':'Contraseña incorrecta.',
+    'auth/user-not-found':'Ese correo no está creado en Firebase → Authentication → Usuarios.',
+    'auth/invalid-email':'El correo no está bien escrito.',
+    'auth/operation-not-allowed':'Falta activar Correo electrónico/contraseña en Firebase → Authentication → Método de acceso.',
+    'auth/configuration-not-found':'Falta pulsar Comenzar en Firebase → Authentication y activar Correo electrónico/contraseña.',
+    'auth/unauthorized-domain':'Falta agregar cosmico-sudp.github.io en Authentication → Configuración → Dominios autorizados.',
+    'auth/too-many-requests':'Demasiados intentos. Espera unos minutos y vuelve a intentar.'};
+    toast((M[e.code]||'No se pudo iniciar sesión.')+' ('+(e.code||e.message)+')','bad')}
+}
 const numBoleta=v=>v.serie+'-'+String(v.numero).padStart(8,'0');
 function resumenCaja(cid){
   const vs=ventas().filter(v=>v.cajaId===cid);
@@ -352,7 +448,7 @@ function setQty(mid,pid,n){
   if(!m.items.length)m.abiertaEn=null;
   put('mesas',mid,m);render();
 }
-function puedeImprimir(){return mode!=='db'}
+function puedeImprimir(){return true}
 function imprimir(id){
   const v=S.ventas[id]; if(!v)return;
   if(!puedeImprimir()){toast('Dentro de Claude no se puede imprimir. Abre tu página de GitHub para imprimir boletas.','warn');return}
@@ -366,7 +462,7 @@ function imprimir(id){
 }
 function completar(mid,metodo,recibido){
   if(!caja().abierta){toast('Abre la caja para cobrar.','warn');return}
-  const m=mesa(mid); if(!m.items.length&&!m.ventaPendiente)return;
+  const m=mesa(mid); if(!m.items.length&&!m.ventaPendiente){ui.modal=null;render();toast('Esta mesa ya no tiene pedido. Puede que se haya cobrado desde otro equipo.','warn');return}
   const id=m.ventaPendiente||emitir(mid,false); if(!id)return;
   confirmarPago(id,metodo,recibido);
   ui.modal={k:'boleta',id}; ui.mside='productos'; render();
@@ -378,6 +474,7 @@ function eliminarVenta(id,repone){
   if(v.estado==='pagada'&&repone){for(const it of v.items){const p=S.productos[it.pid];if(!p||p.ilimitado)continue;put('productos',it.pid,{...clone(p),stock:(Number(p.stock)||0)+it.cant});n+=it.cant}}
   const m=S.mesas[v.mesaId]; if(m&&m.ventaPendiente===id)put('mesas',v.mesaId,{...clone(m),ventaPendiente:null});
   put('ventas',id,null);
+  if(v.codigo)encolar({t:'anular',c:v.codigo});
   ui.modal=null;render();toast(`Boleta ${numBoleta(v)} eliminada.`+(n?` Se devolvieron ${n} unidad${n===1?'':'es'} al stock.`:''));
 }
 const insumos=()=>Object.entries(S.insumos||{}).map(([id,x])=>({id,...x})).sort((a,b)=>String(a.nombre).localeCompare(b.nombre));
@@ -419,7 +516,7 @@ function guardarEgr(){
 }
 function cancelarPedido(mid){
   const m=mesa(mid);
-  if(m.ventaPendiente){const v=S.ventas[m.ventaPendiente];if(v&&v.estado==='pendiente')put('ventas',m.ventaPendiente,{...clone(v),estado:'anulada',anuladaEn:new Date().toISOString()})}
+  if(m.ventaPendiente){const v=S.ventas[m.ventaPendiente];if(v&&v.estado==='pendiente'){put('ventas',m.ventaPendiente,{...clone(v),estado:'anulada',anuladaEn:new Date().toISOString()});if(v.codigo)encolar({t:'anular',c:v.codigo})}}
   put('mesas',mid,{items:[],ventaPendiente:null,abiertaEn:null});
   ui.modal=null;ui.mside='productos';render();toast(`Pedido de ${MESAS.find(x=>x.id===mid).n} cancelado.`);
 }
@@ -429,8 +526,10 @@ function emitir(mid,abrir=true){
   const N=neg(); const items=m.items.filter(it=>S.productos[it.pid]).map(it=>{const p=S.productos[it.pid];return{pid:it.pid,nombre:p.nombre,precio:Number(p.precio),cant:it.cant,...(it.nota?{nota:it.nota}:{})}});
   const total=Math.round(items.reduce((a,i)=>a+i.precio*i.cant,0)*100)/100;
   const id=uid();
-  const v={serie:N.serie,numero:N.siguiente,fecha:new Date().toISOString(),mesaId:mid,mesa:MESAS.find(x=>x.id===mid).n,items,total,estado:'pendiente',cajaId:c.id};
+  const v={serie:N.serie,numero:N.siguiente,fecha:new Date().toISOString(),mesaId:mid,mesa:MESAS.find(x=>x.id===mid).n,items,total,estado:'pendiente',cajaId:c.id,codigo:codigoFid()};
   put('ventas',id,v); put('config','negocio',{...N,siguiente:N.siguiente+1});
+  encolar({t:'crear',c:v.codigo,b:numBoleta(v),total});
+  if(!fb.user)toast('El código de fidelidad se registrará cuando inicies sesión en Caja → Tarjeta de fidelidad.','warn');
   m.ventaPendiente=id; put('mesas',mid,m);
   if(abrir){ui.modal={k:'boleta',id}; render()}
   return id;
@@ -451,6 +550,7 @@ function confirmarPago(id,metodo,recibido){
 function anular(id){
   const v=S.ventas[id]; if(!v||v.estado!=='pendiente')return;
   put('ventas',id,{...clone(v),estado:'anulada',anuladaEn:new Date().toISOString()});
+  if(v.codigo)encolar({t:'anular',c:v.codigo});
   const m=S.mesas[v.mesaId]; if(m&&m.ventaPendiente===id)put('mesas',v.mesaId,{...clone(m),ventaPendiente:null});
   ui.modal=null;render();toast(`Boleta ${numBoleta(v)} anulada. El pedido sigue en ${v.mesa}.`);
 }
@@ -517,6 +617,7 @@ function topView(){
   return `<div class="brand"><span class="logo">${ICON.logo}</span><div><b>${esc(neg().nombre)}</b><small>Caja virtual</small></div></div>
   <nav class="tabs" aria-label="Secciones">${tabs.map(([k,l])=>`<button class="tab" data-act="tab" data-v="${k}" ${ui.tab===k?'aria-current="page"':''}>${l}</button>`).join('')}</nav>
   <div class="status">
+    ${fb.ok?`<button class="pill ${mode==='db'?'ok':'neutral'}" data-act="tab" data-v="caja">${mode==='db'?'Sincronizado':'Solo este equipo'}</button>`:''}
     <button class="pill ${c.abierta?'ok':'neutral'}" data-act="tab" data-v="caja">${c.abierta?'Caja abierta · '+hora(c.abiertaEn):'Caja cerrada'}</button>
     ${al.length?`<button class="pill ${alertas().some(p=>nivel(p)==='out')||alertasIns().some(i=>nivelIns(i)==='out')?'bad':'warn'}" data-act="alertas">${ICON.bell} ${al.length} por reponer</button>`:''}
   </div>`;
@@ -525,6 +626,7 @@ function view(){
   let h='';
   if(note)h+=`<div class="banner info">${esc(note)}</div>`;
   if(mode==='loading')return h+`<div class="empty">Cargando tu caja…</div>`;
+  if(fb.ok&&!fb.user&&ui.tab!=='caja')h+=`<div class="banner warn"><span>Este equipo trabaja solo. Inicia sesión para que los pedidos lleguen a los demás equipos.</span><button class="btn sm" data-act="tab" data-v="caja">Iniciar sesión</button></div>`;
   if(ui.tab==='mesas')h+=vMesas();
   if(ui.tab==='productos')h+=vProductos();
   if(ui.tab==='ventas')h+=vVentas();
@@ -598,15 +700,15 @@ function vVentas(){
   if(ui.vf==='caja')vs=c.abierta?vs.filter(v=>v.cajaId===c.id):[];
   if(ui.vf==='hoy')vs=vs.filter(v=>new Date(v.fecha).toDateString()===hoy);
   const pag=vs.filter(v=>v.estado==='pagada'), pen=vs.filter(v=>v.estado==='pendiente');
-  let h=`<div class="row"><h2>Ventas y boletas</h2><span class="spacer"></span><div class="chips">${[['caja','Caja actual'],['hoy','Hoy'],['todas','Todas']].map(([k,l])=>`<button class="chip" data-act="vf" data-v="${k}" aria-pressed="${ui.vf===k}">${l}</button>`).join('')}</div></div>
+  let h=`<div class="row"><h2>Ventas y boletas</h2><span class="spacer"></span><div class="chips">${[['caja','Caja actual'],['hoy','Hoy'],['todas',mode==='db'?'Últimos 30 días':'Todas']].map(([k,l])=>`<button class="chip" data-act="vf" data-v="${k}" aria-pressed="${ui.vf===k}">${l}</button>`).join('')}</div></div>
   <div class="stats"><div class="stat hero"><span class="lbl">Cobrado</span><b>${money(pag.reduce((a,v)=>a+v.total,0))}</b></div>
    <div class="stat"><span class="lbl">Boletas pagadas</span><b>${pag.length}</b></div>
    <div class="stat"><span class="lbl">Pendientes de pago</span><b style="color:${pen.length?'var(--warn)':'inherit'}">${pen.length} · ${money(pen.reduce((a,v)=>a+v.total,0))}</b></div>
    <div class="stat"><span class="lbl">Ticket promedio</span><b>${money(pag.length?pag.reduce((a,v)=>a+v.total,0)/pag.length:0)}</b></div></div>`;
   if(ui.vf==='caja'&&!c.abierta)return h+`<div class="empty">No hay una caja abierta. Mira <b>Hoy</b> o <b>Todas</b> para ver ventas anteriores.</div>`;
   if(!vs.length)return h+`<div class="empty">Aún no hay boletas en este periodo. Se crean desde una mesa con “Emitir boleta”.</div>`;
-  h+=`<div class="tablebox"><table><thead><tr><th>Boleta</th><th>Fecha</th><th>Mesa</th><th>Productos</th><th>Pago</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>${vs.slice(0,300).map(v=>`<tr>
-   <td class="mono">${numBoleta(v)}</td><td class="muted">${fecha(v.fecha)}</td><td>${esc(v.mesa)}</td><td class="muted">${v.items.reduce((a,i)=>a+i.cant,0)}</td><td>${esc(v.metodo||'—')}</td>
+  h+=`<div class="tablebox"><table><thead><tr><th>Boleta</th><th>Fecha</th><th>Mesa</th><th>Productos</th><th>Pago</th><th>Cód. fidelidad</th><th>Estado</th><th class="r">Total</th><th></th></tr></thead><tbody>${vs.slice(0,300).map(v=>`<tr>
+   <td class="mono">${numBoleta(v)}</td><td class="muted">${fecha(v.fecha)}</td><td>${esc(v.mesa)}</td><td class="muted">${v.items.reduce((a,i)=>a+i.cant,0)}</td><td>${esc(v.metodo||'—')}</td><td class="mono">${v.codigo&&v.estado!=='anulada'?esc(v.codigo):'—'}</td>
    <td>${v.estado==='pagada'?'<span class="pill ok">Pagada</span>':v.estado==='pendiente'?'<span class="pill warn">Pendiente</span>':'<span class="pill neutral">Anulada</span>'}</td>
    <td class="r mono">${money(v.total)}</td><td class="r"><div class="row" style="justify-content:flex-end;flex-wrap:nowrap">${v.estado==='pendiente'?`<button class="btn sm primary" data-act="pagar" data-v="${v.id}">Cobrar</button>`:''}<button class="btn sm" data-act="boleta" data-v="${v.id}">Ver</button><button class="btn sm danger" data-act="delVenta" data-v="${v.id}">Eliminar</button></div></td></tr>`).join('')}</tbody></table></div>`;
   return h;
@@ -644,6 +746,18 @@ function vCaja(){
    <div class="field"><label for="neg-dir">Dirección</label><input class="in" id="neg-dir" data-neg="direccion" value="${esc(N.direccion)}"></div>
    <div class="field"><label for="neg-serie">Serie de boleta</label><input class="in mono" id="neg-serie" data-neg="serie" value="${esc(N.serie)}"></div></div>
    <p class="note" style="text-align:left;margin:0">Próxima boleta: <span class="mono">${esc(N.serie)}-${String(N.siguiente).padStart(8,'0')}</span></p></section>`;
+  h+=`<section class="panel" style="max-width:640px"><h3>Tarjeta de fidelidad</h3><p class="muted" style="margin:0">Cada boleta lleva un código único de 6 caracteres. El cliente lo ingresa en su tarjeta y suma un sello. Con 10 sellos elige un producto gratis, y para entregarlo el cajero escribe este PIN en el celular del cliente.</p>
+   ${/^\d{4}$/.test(N.pin||'')?'':'<div class="banner warn"><span>Todavía no hay PIN. Sin él no se pueden confirmar canjes.</span></div>'}
+   <div class="pinrow"><div class="field"><label for="neg-pin">PIN del cajero (4 números)</label><input class="in mono" id="neg-pin" data-neg="pin" type="${ui.verPin?'text':'password'}" value="${esc(N.pin||'')}" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="••••" style="letter-spacing:.3em"></div>
+   <button class="btn" data-act="verPin">${ui.verPin?'Ocultar':'Mostrar'}</button></div>
+   <p class="note" style="text-align:left;margin:0">Cámbialo si alguien que no es del equipo llega a verlo.</p>
+   ${(()=>{const pend=colaFid().length;
+     if(!fb.ok)return '<div class="banner bad"><span>No se pudo cargar Firebase. Revisa tu conexión y recarga.</span></div>';
+     if(fb.user)return `<div class="banner" style="background:var(--ok-soft);color:var(--ok)"><span>Conectado como <b>${esc(fb.user.email)}</b>. ${pend?`Enviando ${pend} cambio${pend===1?'':'s'}…`:'Todos los códigos están registrados.'}</span><button class="btn sm" data-act="salirFid">Cerrar sesión</button></div>`;
+     return `<div class="banner warn"><span>Inicia sesión con el usuario del cajero para que los códigos de las boletas funcionen en las tarjetas.${pend?` Hay ${pend} cambio${pend===1?'':'s'} esperando.`:''}</span></div>
+     <div class="grid2"><div class="field"><label for="fid-email">Correo del cajero</label><input class="in" id="fid-email" type="email" autocomplete="username" data-in="fidEmail" value="${esc(ui.fidEmail||'')}"></div>
+     <div class="field"><label for="fid-pass">Contraseña</label><input class="in" id="fid-pass" type="password" autocomplete="current-password" data-in="fidPass" value="${esc(ui.fidPass||'')}"></div></div>
+     <div class="row"><button class="btn primary" data-act="entrarFid">Iniciar sesión</button></div>`})()}</section>`;
   h+=`<section class="panel" style="max-width:640px"><h3>Impresora de boletas</h3>
    <div class="field"><label>Ancho del papel de tu ticketera</label><div class="seg" style="max-width:260px"><button data-act="papel" data-v="58" aria-pressed="${N.papel==='58'}">58 mm</button><button data-act="papel" data-v="80" aria-pressed="${N.papel!=='58'}">80 mm</button></div></div>
    <div class="field"><label for="neg-pie">Mensaje al final de la boleta (opcional)</label><input class="in" id="neg-pie" data-neg="pie" value="${esc(N.pie||'')}" placeholder="¡Gracias por su compra!"></div>
@@ -682,20 +796,20 @@ function vEgresos(){
 }
 /* ---------- modales ---------- */
 function receipt(v){
-  const N=neg(); const grav=v.total/1.18;
+  const N=neg();
   return `<div class="receipt"><div class="c"><div class="h">${esc(N.nombre)}</div>${N.ruc?`<div>RUC ${esc(N.ruc)}</div>`:''}${N.direccion?`<div>${esc(N.direccion)}</div>`:''}</div><hr>
   <div class="c"><b>BOLETA DE VENTA</b><br>${numBoleta(v)}</div><hr>
   <div class="kv"><span>${fecha(v.fecha)}</span><span>${esc(v.mesa)}</span></div><hr>
   ${v.items.map(i=>`<div class="it"><span>${i.cant}</span><span>${esc(i.nombre)}<br><span style="color:#6b675c">${money(i.precio)} c/u${i.nota?' · '+esc(i.nota):''}</span></span><span>${money(i.precio*i.cant)}</span></div>`).join('')}<hr>
-  <div class="kv"><span>Op. gravada</span><span>${money(grav)}</span></div><div class="kv"><span>IGV 18%</span><span>${money(v.total-grav)}</span></div>
   <div class="kv tot"><span>TOTAL</span><span>${money(v.total)}</span></div>
   ${v.estado==='pagada'?`<hr><div class="kv"><span>Pago</span><span>${esc(v.metodo)}</span></div>${v.metodo==='Efectivo'?`<div class="kv"><span>Recibido</span><span>${money(v.recibido)}</span></div><div class="kv"><span>Vuelto</span><span>${money(v.vuelto)}</span></div>`:''}`:''}
   <div class="c"><span class="stamp ${v.estado==='pagada'?'paid':v.estado==='pendiente'?'pend':'void'}">${v.estado==='pagada'?'PAGADO':v.estado==='pendiente'?'POR PAGAR':'ANULADA'}</span></div>
+  ${v.codigo&&v.estado!=='anulada'?`<div class="fid"><div class="lbl">TARJETA DE FIDELIDAD</div><b>${esc(v.codigo)}</b><div>Ingresa este código y suma un sello.<br>10 sellos = 1 producto gratis.</div></div>`:''}
   <small>Comprobante interno de control. No reemplaza la boleta electrónica SUNAT.</small></div>`;
 }
 function receiptText(v){
   const N=neg();
-  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:''].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
+  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:'',...(v.codigo&&v.estado!=='anulada'?['','Código de fidelidad: '+v.codigo,'Ingrésalo y suma un sello. 10 sellos = 1 producto gratis.']:[])].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
 }
 function modalView(){
   const M=ui.modal; if(!M)return'';
@@ -728,6 +842,7 @@ function modalView(){
   if(M.k==='cancelarPed'){const m=S.mesas[M.mid]||{items:[]};const n=(m.items||[]).reduce((a,i)=>a+i.cant,0);
     b=`<h2>¿Cancelar el pedido de ${esc(MESAS.find(x=>x.id===M.mid).n)}?</h2><p class="muted" style="margin:0">Se quitan los ${n} producto${n===1?'':'s'} y la mesa queda libre. No se descuenta nada del stock.${m.ventaPendiente?' La boleta emitida queda anulada.':''}</p>
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, volver</button><button class="btn danger" style="flex:1" data-act="okCancelarPed">Sí, cancelar pedido</button></div>`}
+  if(M.k==='migrar'){b=`<h2>¿Subir los datos de este equipo?</h2><p class="muted" style="margin:0">La base de datos compartida está vacía. Este equipo tiene ${Object.keys(S.productos).length} productos y ${Object.keys(S.ventas).length} boletas. Súbelos desde la computadora de la caja, que es la que tiene los datos reales; en los demás equipos elige “Empezar vacío” solo si quieres borrar lo de este equipo.</p><div class="row"><button class="btn" style="flex:1" data-act="okVacio">Empezar vacío</button><button class="btn primary" style="flex:1" data-act="okMigrar">Subir datos</button></div>`}
   if(M.k==='restaurar'){const d=M.datos;b=`<h2>¿Restaurar este respaldo?</h2><p class="muted" style="margin:0">${M.fecha?'Respaldo del '+fecha(M.fecha)+'. ':''}Tiene ${Object.keys(d.productos||{}).length} productos y ${Object.keys(d.ventas||{}).length} boletas. Reemplaza todo lo que hay ahora en este equipo.</p><div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Cancelar</button><button class="btn primary" style="flex:1" data-act="okRestaurar">Restaurar</button></div>`}
   if(M.k==='ins'){const f=M.f;
     b=`<h2>${M.id?'Editar insumo':'Nuevo insumo'}</h2>
@@ -840,7 +955,7 @@ function toast(msg,kind){const t=document.createElement('div');t.className='toas
 document.addEventListener('click',ev=>{
   const b=ev.target.closest('[data-act]'); if(!b||b.disabled)return; const act=b.dataset.act, v=b.dataset.v;
   if((/^ok/.test(act)||['metodo','rec','iunid','ecat','borrarProd','borrarIns'].includes(act))&&!ui.modal)return;
-  if(act==='ov'){if(ev.target===b){ui.modal=null;render()}return}
+  if(act==='ov'){if(ev.target===b&&ui.modal?.k!=='migrar'){ui.modal=null;render()}return}
   switch(act){
     case'tab':ui.tab=v;ui.modal=null;break;
     case'mesa':ui.mesa=v;ui.mside=(S.mesas[v]?.items||[]).length?'pedido':'productos';break;
@@ -883,6 +998,11 @@ document.addEventListener('click',ev=>{
     case'imprimir':imprimir(v);return;
     case'papel':put('config','negocio',{...neg(),papel:v});toast(`Papel de ${v} mm guardado.`);break;
     case'probarImp':{const N=neg();const id='__prueba';S.ventas={...S.ventas,[id]:{serie:N.serie,numero:0,fecha:new Date().toISOString(),mesa:'Prueba',items:[{nombre:'Producto de prueba',precio:10,cant:2},{nombre:'Otro producto con nombre largo',precio:4.5,cant:1}],total:24.5,estado:'pagada',metodo:'Efectivo',recibido:30,vuelto:5.5}};imprimir(id);const n={...S.ventas};delete n[id];S.ventas=n;return}
+    case'verPin':ui.verPin=!ui.verPin;break;
+    case'okMigrar':migrar();return;
+    case'okVacio':ui.modal=null;escuchar();return;
+    case'entrarFid':entrarFid();return;
+    case'salirFid':fb.auth.signOut();toast('Sesión cerrada.');return;
     case'ef':ui.ef=v;break;
     case'nuevoIns':ui.modal={k:'ins',id:null,f:{nombre:'',unidad:'unid',cantidad:'',minimo:''}};break;
     case'editIns':{const i=S.insumos[v];ui.modal={k:'ins',id:v,f:{nombre:i.nombre,unidad:i.unidad==='unid.'?'unid':i.unidad,cantidad:String(i.cantidad),minimo:String(i.minimo)}};break}
@@ -903,12 +1023,18 @@ document.addEventListener('click',ev=>{
     case'okDelVenta':eliminarVenta(ui.modal.id,ui.modal.f.repone);return;
     case'hayOtra':{const p=S.productos[v];put('productos',v,{...clone(p),agotado:false});toast(`${p.nombre} disponible otra vez.`);break}
     case'respaldo':descargarRespaldo();return;
-    case'okRestaurar':{const d=ui.modal.datos;COLS.forEach(c=>S[c]=d[c]||{});saveLocal();ui.modal=null;toast('Respaldo restaurado.');break}
+    case'okRestaurar':{const d=ui.modal.datos;if(mode==='db'){COLS.forEach(c=>{const n=d[c]||{};Object.keys(S[c]).forEach(id=>{if(!(id in n))put(c,id,null)});Object.entries(n).forEach(([id,x])=>put(c,id,x))})}else{COLS.forEach(c=>S[c]=d[c]||{});saveLocal()}ui.modal=null;toast('Respaldo restaurado.');break}
   }
   render();
 });
 document.addEventListener('input',ev=>{
   const t=ev.target;
+  if(t.tagName==='INPUT'&&(t.inputMode==='decimal'||t.inputMode==='numeric')){
+    let v=t.value.replace(/,/g,'.').replace(t.inputMode==='numeric'?/[^0-9]/g:/[^0-9.]/g,'');
+    const i=v.indexOf('.'); if(i>=0)v=v.slice(0,i+1)+v.slice(i+1).replace(/\./g,'');
+    if(v!==t.value){const pos=Math.max(0,(t.selectionStart||v.length)-(t.value.length-v.length));t.value=v;try{t.setSelectionRange(pos,pos)}catch(_){}}
+  }
+  if(t.dataset.in==='fidEmail'||t.dataset.in==='fidPass'){ui[t.dataset.in]=t.value;return}
   if(t.dataset.in){ui[t.dataset.in]=t.value;render();return}
   if(t.dataset.ctm&&ui.modal){ui.modal.f.ct[t.dataset.ctm]=clean(t.value);render();return}
   if(t.dataset.mfc&&ui.modal){ui.modal.f[t.dataset.mfc]=t.checked;render();return}
@@ -921,12 +1047,14 @@ document.addEventListener('change',ev=>{
   if(t.dataset.qty){setQty(ui.mesa,t.dataset.qty,t.value);return}
   if(t.dataset.nota){const m=mesa(ui.mesa);const it=m.items.find(i=>i.pid===t.dataset.nota);if(it){const n=t.value.trim();if(n)it.nota=n;else delete it.nota;put('mesas',ui.mesa,m);render()}return}
   if(t.dataset.negc){put('config','negocio',{...neg(),[t.dataset.negc]:t.checked});render();toast(t.checked?'Se imprimirá automáticamente al cobrar.':'Impresión automática desactivada.');return}
+  if(t.dataset.neg==='pin'){const val=t.value.trim();if(!/^\d{4}$/.test(val)){toast('El PIN debe tener exactamente 4 números.','bad');return}put('config','negocio',{...neg(),pin:val});encolar({t:'pin',pin:val});render();toast(fb.user?'PIN del cajero guardado.':'PIN guardado aquí. Inicia sesión para activarlo en las tarjetas.');return}
   if(t.dataset.neg){const N=neg();let val=t.value.trim();if(t.dataset.neg==='serie')val=val.toUpperCase()||'B001';if(t.dataset.neg==='nombre')val=val||'Mi negocio';put('config','negocio',{...N,[t.dataset.neg]:val});render();toast('Datos del negocio guardados.')}
 });
 document.addEventListener('keydown',ev=>{
-  if(ev.key==='Escape'&&ui.modal){ui.modal=null;render()}
+  if(ev.key==='Escape'&&ui.modal&&ui.modal.k!=='migrar'){ui.modal=null;render()}
   if(ev.key==='Enter'&&ev.target.id==='apertura'){ev.preventDefault();abrirCaja();return}
   if(ev.key==='Enter'&&ui.modal&&ev.target.tagName==='INPUT'&&ev.target.type!=='checkbox'){const ok=document.querySelector('.modal [data-act^="ok"]:not([disabled]):not([data-act=okBorrar]):not([data-act=okBorrarIns]):not([data-act=okDelVenta]):not([data-act=okDelEgr]):not([data-act=okCancelarPed]):not([data-act=okAnular])');if(ok){ev.preventDefault();ev.target.dispatchEvent(new Event('change',{bubbles:true}));setTimeout(()=>ok.click(),0)}}
+  if(ev.key==='Enter'&&ev.target.id==='fid-pass'){ev.preventDefault();entrarFid();return}
 });
 init();
 })();
