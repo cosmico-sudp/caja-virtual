@@ -139,6 +139,9 @@ input.in:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(
 .two{display:grid;grid-template-columns:1fr 1.4fr;gap:8px}
 .nota{grid-column:1/-1;border:0;border-bottom:1px dotted var(--line);background:transparent;font-size:13px;padding:3px 0;color:var(--muted);width:100%}
 .nota:focus{outline:none;border-bottom-color:var(--accent);color:var(--ink)}
+.sabor{font-size:12.5px;font-weight:600;color:var(--accent)}
+.sabchip{display:inline-flex;align-items:center;gap:4px;padding-right:4px;color:var(--ink)}
+.sabchip button{border:0;background:var(--sunk);border-radius:50%;width:20px;height:20px;cursor:pointer;line-height:1;color:var(--muted)}
 .notaro{grid-column:1/-1;font-size:13px;color:var(--warn);font-style:italic}
 .mseg{display:none}
 .gobar{display:none}
@@ -335,7 +338,10 @@ const prods=()=>Object.entries(S.productos).map(([id,p])=>({id,...p})).sort((a,b
 const mesa=id=>{const m=S.mesas[id];return m?clone(m):{items:[],ventaPendiente:null}};
 const ventas=()=>Object.entries(S.ventas).map(([id,v])=>({id,...v})).sort((a,b)=>String(b.fecha).localeCompare(a.fecha));
 function reservado(pid,salvo){let n=0;for(const[mid,m]of Object.entries(S.mesas)){if(mid===salvo)continue;for(const it of(m.items||[]))if(it.pid===pid)n+=it.cant}return n}
-function enMesa(mid,pid){const it=(S.mesas[mid]?.items||[]).find(i=>i.pid===pid);return it?it.cant:0}
+function enMesa(mid,pid){return(S.mesas[mid]?.items||[]).filter(i=>i.pid===pid).reduce((a,i)=>a+i.cant,0)}
+const lk=it=>it.pid+(it.sab?'|'+it.sab:'');
+function enLinea(mid,key){const it=(S.mesas[mid]?.items||[]).find(i=>lk(i)===key);return it?it.cant:0}
+function kid(key){let h=5381;for(let i=0;i<key.length;i++)h=((h<<5)+h+key.charCodeAt(i))|0;return(h>>>0).toString(36)}
 function nivel(p){if(p.ilimitado)return p.agotado?'out':'ok';const s=Number(p.stock)||0;if(s<=0)return'out';if(s<=(Number(p.minimo)||0))return'low';return'ok'}
 const alertas=()=>prods().filter(p=>nivel(p)!=='ok');
 const totalMesa=m=>(m.items||[]).reduce((a,it)=>{const p=S.productos[it.pid];return a+(p?Number(p.precio):0)*it.cant},0);
@@ -436,25 +442,35 @@ function resumenCaja(cid){
 }
 
 /* ---------- acciones ---------- */
-function setQty(mid,pid,n){
+function setQty(mid,key,n){
   const m=mesa(mid); if(m.ventaPendiente){toast('Esta mesa ya tiene boleta emitida. Toca “Modificar pedido” para cambiarlo.','warn');return}
+  const cut=key.indexOf('|'), pid=cut<0?key:key.slice(0,cut), sab=cut<0?'':key.slice(cut+1);
   const p=S.productos[pid]; if(!p)return;
   n=Math.max(0,Math.floor(Number(n)||0));
-  const max=p.ilimitado?(p.agotado?0:Infinity):Math.max(0,(Number(p.stock)||0)-reservado(pid,mid));
-  if(n>max&&n>enMesa(mid,pid)){toast(max>0?`Solo hay ${max} de ${p.nombre} disponibles.`:`${p.nombre} está agotado.`,'warn');n=max}
-  const i=m.items.findIndex(x=>x.pid===pid);
-  if(n<=0){if(i>=0)m.items.splice(i,1)}else if(i>=0)m.items[i].cant=n;else m.items.push({pid,cant:n});
+  const otras=m.items.filter(x=>x.pid===pid&&lk(x)!==key).reduce((a,x)=>a+x.cant,0);
+  const max=p.ilimitado?(p.agotado?0:Infinity):Math.max(0,(Number(p.stock)||0)-reservado(pid,mid)-otras);
+  if(n>max&&n>enLinea(mid,key)){toast(max>0?`Solo hay ${max} más de ${p.nombre} disponibles.`:`${p.nombre} está agotado.`,'warn');n=max}
+  const i=m.items.findIndex(x=>lk(x)===key);
+  if(n<=0){if(i>=0)m.items.splice(i,1)}else if(i>=0)m.items[i].cant=n;else m.items.push({pid,cant:n,...(sab?{sab}:{})});
   if(!m.abiertaEn&&m.items.length)m.abiertaEn=new Date().toISOString();
   if(!m.items.length)m.abiertaEn=null;
   put('mesas',mid,m);render();
 }
 function puedeImprimir(){return true}
+function imprimirAntes(mid){
+  if(!caja().abierta){toast('Abre la caja para emitir e imprimir boletas.','warn');return}
+  const m=mesa(mid); let id=m.ventaPendiente;
+  if(!id){if(!m.items.length)return;id=emitir(mid,false);if(!id)return}
+  render(); imprimir(id);
+  toast('Boleta impresa como POR PAGAR. Cuando paguen, toca Completar pedido.');
+}
 function imprimir(id){
   const v=S.ventas[id]; if(!v)return;
   if(!puedeImprimir()){toast('Dentro de Claude no se puede imprimir. Abre tu página de GitHub para imprimir boletas.','warn');return}
   const N=neg(), w=N.papel==='58'?58:80, cw=w===58?48:72;
   const pa=$('print-area'); pa.className=w===58?'p58':''; pa.style.width=cw+'mm'; pa.style.padding='0 '+((w-cw)/2)+'mm';
   pa.innerHTML=receipt(v)+(N.pie?`<div style="text-align:center;font-family:var(--f-mono);font-size:${w===58?10:11}px;margin-top:6px">${esc(N.pie)}</div>`:'');
+  if(v.estado!=='pagada')pa.querySelectorAll('.fid').forEach(x=>x.remove());
   const hmm=Math.ceil(pa.scrollHeight*25.4/96)+8;
   let st=$('print-page'); if(!st){st=document.createElement('style');st.id='print-page';document.head.appendChild(st)}
   st.textContent=`@page{size:${w}mm ${hmm}mm;margin:0}`;
@@ -523,7 +539,7 @@ function cancelarPedido(mid){
 function emitir(mid,abrir=true){
   const c=caja(); if(!c.abierta){toast('Abre la caja antes de emitir boletas.','warn');return}
   const m=mesa(mid); if(!m.items.length)return;
-  const N=neg(); const items=m.items.filter(it=>S.productos[it.pid]).map(it=>{const p=S.productos[it.pid];return{pid:it.pid,nombre:p.nombre,precio:Number(p.precio),cant:it.cant,...(it.nota?{nota:it.nota}:{})}});
+  const N=neg(); const items=m.items.filter(it=>S.productos[it.pid]).map(it=>{const p=S.productos[it.pid];return{pid:it.pid,nombre:p.nombre,precio:Number(p.precio),cant:it.cant,...(it.sab?{sab:it.sab}:{}),...(it.nota?{nota:it.nota}:{})}});
   const total=Math.round(items.reduce((a,i)=>a+i.precio*i.cant,0)*100)/100;
   const id=uid();
   const v={serie:N.serie,numero:N.siguiente,fecha:new Date().toISOString(),mesaId:mid,mesa:MESAS.find(x=>x.id===mid).n,items,total,estado:'pendiente',cajaId:c.id,codigo:codigoFid()};
@@ -601,7 +617,7 @@ function guardarProd(){
   const precio=num(f.precio); if(!(precio>=0)){toast('Escribe un precio válido, por ejemplo 12.50.','warn');return}
   if(Object.entries(S.productos).some(([k,p])=>k!==ui.modal.id&&String(p.nombre).trim().toLowerCase()===nombre.toLowerCase())){toast(`Ya existe un producto llamado ${nombre}.`,'warn');return}
   const id=ui.modal.id||uid(); const prev=S.productos[id]||{};
-  put('productos',id,{nombre,categoria:String(f.categoria||'').trim()||'General',precio:Math.round(precio*100)/100,stock:Math.max(0,Math.floor(num(f.stock)||0)),minimo:Math.max(0,Math.floor(num(f.minimo)||0)),ilimitado:!!f.ilimitado,agotado:!!(f.ilimitado&&f.agotado)});
+  put('productos',id,{nombre,categoria:String(f.categoria||'').trim()||'General',precio:Math.round(precio*100)/100,stock:Math.max(0,Math.floor(num(f.stock)||0)),minimo:Math.max(0,Math.floor(num(f.minimo)||0)),ilimitado:!!f.ilimitado,agotado:!!(f.ilimitado&&f.agotado),sabores:[...new Set([...(f.sabores||[]),...String(f.nuevoSabor||'').split(',')].map(x=>x.trim()).filter(Boolean))]});
   ui.modal=null;render();toast(prev.nombre?`${nombre} actualizado.`:`${nombre} registrado.`);
 }
 function ajustarStock(id,d){const p=S.productos[id];if(!p)return;put('productos',id,{...clone(p),stock:Math.max(0,(Number(p.stock)||0)+d)});render()}
@@ -655,22 +671,23 @@ function vPicker(){
   <input class="in" id="q" type="search" placeholder="Buscar producto…" value="${esc(ui.q)}" data-in="q" autocomplete="off">
   <div class="chips">${cats.map(c=>`<button class="chip" data-act="cat" data-v="${esc(c)}" aria-pressed="${ui.cat===c}">${esc(c)}</button>`).join('')}</div>
   <div class="prods">${list.map(p=>{const disp=p.ilimitado?(p.agotado?0:Infinity):(Number(p.stock)||0)-reservado(p.id,mid)-enMesa(mid,p.id);const lv=nivel(p);
-    return `<button class="prod" data-act="add" data-v="${p.id}" ${disp<=0||locked?'disabled':''}><b>${esc(p.nombre)}</b><span class="p">${money(p.precio)}</span><span class="s ${lv==='out'||disp<=0?'bad':lv==='low'?'warn':''}">${disp<=0?(p.ilimitado?'Agotado':'Sin stock'):p.ilimitado?'Disponible':`Quedan ${disp}`}</span></button>`}).join('')||'<div class="muted">Nada coincide con la búsqueda.</div>'}</div></section>`;
+    return `<button class="prod" data-act="add" data-v="${p.id}" ${disp<=0||locked?'disabled':''}><b>${esc(p.nombre)}</b><span class="p">${money(p.precio)}</span><span class="s ${lv==='out'||disp<=0?'bad':lv==='low'?'warn':''}">${disp<=0?(p.ilimitado?'Agotado':'Sin stock'):p.ilimitado?'Disponible':`Quedan ${disp}`}</span>${(p.sabores||[]).length&&disp>0?`<span class="s" style="color:var(--accent)">${p.sabores.length} sabor${p.sabores.length===1?'':'es'} · elegir</span>`:''}</button>`}).join('')||'<div class="muted">Nada coincide con la búsqueda.</div>'}</div></section>`;
 }
 function vTicket(){
   const mid=ui.mesa, m=S.mesas[mid]||{items:[]}, M=MESAS.find(x=>x.id===mid);
   const v=m.ventaPendiente?S.ventas[m.ventaPendiente]:null; const items=(m.items||[]).filter(i=>S.productos[i.pid]);
-  let lines=items.map(it=>{const p=S.productos[it.pid];return `<div class="line"><span class="nm">${esc(p.nombre)}</span><span class="sub">${money(p.precio*it.cant)}</span>
-    ${v?`<span class="pu">${it.cant} × ${money(p.precio)}</span>`:`<span class="pu">${money(p.precio)} c/u</span><button class="x" data-act="rm" data-v="${it.pid}">Quitar</button>
-    <span class="qty"><button data-act="dec" data-v="${it.pid}" aria-label="Uno menos">−</button><input id="qty-${it.pid}" inputmode="numeric" value="${it.cant}" data-qty="${it.pid}" aria-label="Cantidad"><button data-act="inc" data-v="${it.pid}" aria-label="Uno más">+</button></span>
-    <input class="nota" id="nota-${it.pid}" data-nota="${it.pid}" value="${esc(it.nota||'')}" placeholder="+ Nota (ej. sin hielo, para llevar)" aria-label="Nota para ${esc(p.nombre)}">`}${v&&it.nota?`<span class="notaro">${esc(it.nota)}</span>`:''}</div>`}).join('');
+  let lines=items.map(it=>{const p=S.productos[it.pid];const K=esc(lk(it)),I=kid(lk(it));return `<div class="line"><span class="nm">${esc(p.nombre)}${it.sab?`<br><span class="sabor">${esc(it.sab)}</span>`:''}</span><span class="sub">${money(p.precio*it.cant)}</span>
+    ${v?`<span class="pu">${it.cant} × ${money(p.precio)}</span>`:`<span class="pu">${money(p.precio)} c/u</span><button class="x" data-act="rm" data-v="${K}">Quitar</button>
+    <span class="qty"><button data-act="dec" data-v="${K}" aria-label="Uno menos">−</button><input id="qty-${I}" inputmode="numeric" value="${it.cant}" data-qty="${K}" aria-label="Cantidad"><button data-act="inc" data-v="${K}" aria-label="Uno más">+</button></span>
+    <input class="nota" id="nota-${I}" data-nota="${K}" value="${esc(it.nota||'')}" placeholder="+ Nota (ej. sin hielo, para llevar)" aria-label="Nota para ${esc(p.nombre)}">`}${v&&it.nota?`<span class="notaro">${esc(it.nota)}</span>`:''}</div>`}).join('');
   if(!lines)lines=`<div class="empty">${esc(M.n)} está libre.<br>Toca un producto en <b>Agregar productos</b> para empezar el pedido.</div>`;
   const tot=totalMesa(m);
   let foot='';
   if(v)foot=`<div class="banner warn" style="padding:10px 12px">Boleta ${numBoleta(v)} emitida, falta cobrar</div>
     <div class="two"><button class="btn danger big" data-act="cancelarPed">Cancelar pedido</button><button class="btn primary big" data-act="completar">Completar pedido</button></div>
-    <div class="row"><button class="btn sm" data-act="boleta" data-v="${m.ventaPendiente}" style="flex:1">Ver boleta</button><button class="btn sm" data-act="anular" data-v="${m.ventaPendiente}" style="flex:1">Modificar pedido</button></div>`;
+    <div class="row"><button class="btn sm" data-act="preImp" style="flex:1">Imprimir boleta</button><button class="btn sm" data-act="boleta" data-v="${m.ventaPendiente}" style="flex:1">Ver boleta</button><button class="btn sm" data-act="anular" data-v="${m.ventaPendiente}" style="flex:1">Modificar pedido</button></div>`;
   else if(items.length)foot=`<div class="two"><button class="btn danger big" data-act="cancelarPed">Cancelar pedido</button><button class="btn primary big" data-act="completar">Completar pedido</button></div>
+    <button class="btn" data-act="preImp">Imprimir boleta antes de cobrar</button>
     <button class="btn sm" data-act="mside" data-v="productos" style="align-self:center">+ Agregar más productos</button>`;
   return `<aside class="panel ticket"><div class="row"><h2>Pedido · ${esc(M.n)}</h2><span class="spacer"></span>${m.abiertaEn&&items.length?`<span class="muted" style="font-size:13px">desde ${hora(m.abiertaEn)}</span>`:''}</div>
    <div class="lines">${lines}</div><div class="total"><span class="lbl">Total</span><b>${money(tot)}</b></div>${foot}</aside>`;
@@ -800,7 +817,7 @@ function receipt(v){
   return `<div class="receipt"><div class="c"><div class="h">${esc(N.nombre)}</div>${N.ruc?`<div>RUC ${esc(N.ruc)}</div>`:''}${N.direccion?`<div>${esc(N.direccion)}</div>`:''}</div><hr>
   <div class="c"><b>BOLETA DE VENTA</b><br>${numBoleta(v)}</div><hr>
   <div class="kv"><span>${fecha(v.fecha)}</span><span>${esc(v.mesa)}</span></div><hr>
-  ${v.items.map(i=>`<div class="it"><span>${i.cant}</span><span>${esc(i.nombre)}<br><span style="color:#6b675c">${money(i.precio)} c/u${i.nota?' · '+esc(i.nota):''}</span></span><span>${money(i.precio*i.cant)}</span></div>`).join('')}<hr>
+  ${v.items.map(i=>`<div class="it"><span>${i.cant}</span><span>${esc(i.nombre)}${i.sab?`<br><b>Sabor: ${esc(i.sab)}</b>`:''}<br><span style="color:#6b675c">${money(i.precio)} c/u${i.nota?' · '+esc(i.nota):''}</span></span><span>${money(i.precio*i.cant)}</span></div>`).join('')}<hr>
   <div class="kv tot"><span>TOTAL</span><span>${money(v.total)}</span></div>
   ${v.estado==='pagada'?`<hr><div class="kv"><span>Pago</span><span>${esc(v.metodo)}</span></div>${v.metodo==='Efectivo'?`<div class="kv"><span>Recibido</span><span>${money(v.recibido)}</span></div><div class="kv"><span>Vuelto</span><span>${money(v.vuelto)}</span></div>`:''}`:''}
   <div class="c"><span class="stamp ${v.estado==='pagada'?'paid':v.estado==='pendiente'?'pend':'void'}">${v.estado==='pagada'?'PAGADO':v.estado==='pendiente'?'POR PAGAR':'ANULADA'}</span></div>
@@ -809,7 +826,7 @@ function receipt(v){
 }
 function receiptText(v){
   const N=neg();
-  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:'',...(v.codigo&&v.estado!=='anulada'?['','Código de fidelidad: '+v.codigo,'Ingrésalo y suma un sello. 10 sellos = 1 producto gratis.']:[])].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
+  return [N.nombre,N.ruc?'RUC '+N.ruc:'','BOLETA '+numBoleta(v),fecha(v.fecha)+' · '+v.mesa,'',...v.items.map(i=>`${i.cant} x ${i.nombre}${i.sab?' ('+i.sab+')':''}  ${money(i.precio*i.cant)}`),'','TOTAL '+money(v.total),v.metodo?'Pago: '+v.metodo:'',...(v.codigo&&v.estado!=='anulada'?['','Código de fidelidad: '+v.codigo,'Ingrésalo y suma un sello. 10 sellos = 1 producto gratis.']:[])].filter((x,i,a)=>x!==''||a[i-1]!=='').join('\n');
 }
 function modalView(){
   const M=ui.modal; if(!M)return'';
@@ -831,14 +848,19 @@ function modalView(){
     const quick=[...new Set([total,...[10,20,50,100,200].filter(x=>x>total)])].slice(0,5);
     const efe=f.metodo==='Efectivo', falta=efe&&f.recibido!==''&&vu<0;
     b=`<h2>Completar pedido · ${esc(MESAS.find(x=>x.id===M.mid).n)}</h2>
-    <div class="mini-list">${items.map(i=>`<div><span>${i.cant} × ${esc(i.nombre)}</span><span class="mono">${money(i.precio*i.cant)}</span></div>`).join('')}</div>
+    <div class="mini-list">${items.map(i=>`<div><span>${i.cant} × ${esc(i.nombre)}${i.sab?' · '+esc(i.sab):''}</span><span class="mono">${money(i.precio*i.cant)}</span></div>`).join('')}</div>
     <div class="bigtotal"><span class="lbl">Total a cobrar</span><b>${money(total)}</b></div>
     <div class="field"><label>¿Cómo paga?</label><div class="seg">${METODOS.map(x=>`<button data-act="metodo" data-v="${x}" aria-pressed="${f.metodo===x}">${x}</button>`).join('')}</div></div>
     ${efe?`<div class="field"><label for="recibido">¿Con cuánto paga? (S/)</label><input class="in mono" id="recibido" type="text" autocomplete="off" inputmode="decimal" value="${esc(f.recibido)}" data-mf="recibido" data-live placeholder="${total.toFixed(2)}" style="font-size:20px;padding:12px"></div>
     <div class="chips">${quick.map(x=>`<button class="chip" data-act="rec" data-v="${x}">${x===total?'Exacto':money(x)}</button>`).join('')}</div>
     <div class="vuelto ${f.recibido===''?'idle':falta?'falta':''}"><span class="lbl" style="color:inherit">${falta?'Falta':'Vuelto'}</span><b>${f.recibido===''?'—':money(Math.abs(vu))}</b></div>`
     :`<p class="muted" style="margin:0">Verifica que el pago por ${esc(f.metodo)} haya llegado antes de confirmar.</p>`}
+    <button class="btn" data-act="preImp">${pv?'Volver a imprimir la boleta':'Imprimir boleta antes de cobrar'}</button>
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Volver</button><button class="btn primary big" style="flex:2" data-act="okCompletar" ${falta?'disabled':''}>Cobrar y emitir boleta</button></div>`}
+  if(M.k==='sabor'){const p=S.productos[M.pid];if(!p)return'';
+    b=`<h2>${esc(p.nombre)}</h2><p class="muted" style="margin:0">Elige el sabor. Puedes marcar más de uno si van juntos en el mismo producto.</p>
+    <div class="seg">${(p.sabores||[]).map(x=>`<button data-act="selSab" data-v="${esc(x)}" aria-pressed="${M.sel.includes(x)}">${esc(x)}</button>`).join('')}</div>
+    <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">Cancelar</button><button class="btn primary" style="flex:2" data-act="okSabor" ${M.sel.length?'':'disabled'}>${M.sel.length?'Agregar al pedido':'Elige un sabor'}</button></div>`}
   if(M.k==='cancelarPed'){const m=S.mesas[M.mid]||{items:[]};const n=(m.items||[]).reduce((a,i)=>a+i.cant,0);
     b=`<h2>¿Cancelar el pedido de ${esc(MESAS.find(x=>x.id===M.mid).n)}?</h2><p class="muted" style="margin:0">Se quitan los ${n} producto${n===1?'':'s'} y la mesa queda libre. No se descuenta nada del stock.${m.ventaPendiente?' La boleta emitida queda anulada.':''}</p>
     <div class="row"><button class="btn" style="flex:1" data-act="cerrarModal">No, volver</button><button class="btn danger" style="flex:1" data-act="okCancelarPed">Sí, cancelar pedido</button></div>`}
@@ -901,6 +923,10 @@ function modalView(){
     <div class="field"><label for="pf-precio">Precio de venta (S/)</label><input class="in mono" id="pf-precio" type="text" autocomplete="off" inputmode="decimal" data-mf="precio" value="${esc(f.precio)}"></div>
     ${f.ilimitado?'':`<div class="field"><label for="pf-stock">Cantidad que tienes</label><input class="in mono" id="pf-stock" type="text" autocomplete="off" inputmode="numeric" data-mf="stock" value="${esc(f.stock)}"></div>
     <div class="field"><label for="pf-min">Avisarme cuando queden</label><input class="in mono" id="pf-min" type="text" autocomplete="off" inputmode="numeric" data-mf="minimo" value="${esc(f.minimo)}"></div>`}</div>
+    <div class="field"><label for="pf-sabor">Sabores (opcional)</label>
+    ${(f.sabores||[]).length?`<div class="chips">${f.sabores.map((x,i)=>`<span class="chip sabchip">${esc(x)}<button type="button" data-act="quitaSab" data-v="${i}" aria-label="Quitar ${esc(x)}">×</button></span>`).join('')}</div>`:''}
+    <div class="row" style="flex-wrap:nowrap"><input class="in" id="pf-sabor" data-mf="nuevoSabor" value="${esc(f.nuevoSabor||'')}" placeholder="Ej. Fresa, Mango, Lúcuma" autocomplete="off"><button type="button" class="btn" data-act="addSab">Agregar sabor</button></div>
+    <span class="note" style="text-align:left">Si agregas sabores, al pedir este producto se elige el sabor. Puedes escribir varios separados por coma.</span></div>
     <label class="check"><input type="checkbox" id="pf-ilim" data-mfc="ilimitado" ${f.ilimitado?'checked':''}><span><b>Stock ilimitado</b><br><span class="muted" style="font-size:13px">Para platos que se preparan o cosas que no cuentas. No se descuenta nada; solo marcas cuando se acabe.</span></span></label>
     ${f.ilimitado?`<label class="check"><input type="checkbox" id="pf-agot" data-mfc="agotado" ${f.agotado?'checked':''}><span><b>Se acabó por ahora</b><br><span class="muted" style="font-size:13px">No se podrá agregar a las mesas hasta que lo desmarques.</span></span></label>`:''}
     ${M.borrar?`<div class="banner bad"><span>¿Borrar ${esc(f.nombre)}? Las boletas anteriores no cambian.</span><button class="btn sm danger" data-act="okBorrar">Sí, borrar</button></div>`:''}
@@ -966,9 +992,11 @@ document.addEventListener('click',ev=>{
     case'okCancelarPed':cancelarPedido(ui.modal.mid);return;
     case'cat':ui.cat=v;break;
     case'vf':ui.vf=v;break;
-    case'add':setQty(ui.mesa,v,enMesa(ui.mesa,v)+1);return;
-    case'inc':setQty(ui.mesa,v,enMesa(ui.mesa,v)+1);return;
-    case'dec':setQty(ui.mesa,v,enMesa(ui.mesa,v)-1);return;
+    case'add':{const p=S.productos[v];if(p&&(p.sabores||[]).length){if(S.mesas[ui.mesa]?.ventaPendiente){setQty(ui.mesa,v,0);return}ui.modal={k:'sabor',pid:v,sel:[]};break}setQty(ui.mesa,v,enLinea(ui.mesa,v)+1);return}
+    case'selSab':{const i=ui.modal.sel.indexOf(v);if(i>=0)ui.modal.sel.splice(i,1);else ui.modal.sel.push(v);break}
+    case'okSabor':{const M=ui.modal;if(!M.sel.length){toast('Elige al menos un sabor.','warn');return}const ord=(S.productos[M.pid]?.sabores||[]).filter(x=>M.sel.includes(x));const key=M.pid+'|'+ord.join(' + ');ui.modal=null;setQty(ui.mesa,key,enLinea(ui.mesa,key)+1);return}
+    case'inc':setQty(ui.mesa,v,enLinea(ui.mesa,v)+1);return;
+    case'dec':setQty(ui.mesa,v,enLinea(ui.mesa,v)-1);return;
     case'rm':setQty(ui.mesa,v,0);return;
     case'vaciar':put('mesas',ui.mesa,{items:[],ventaPendiente:null,abiertaEn:null});break;
     case'emitir':emitir(ui.mesa);return;
@@ -979,8 +1007,8 @@ document.addEventListener('click',ev=>{
     case'okPago':confirmarPago(ui.modal.id,ui.modal.f.metodo,ui.modal.f.recibido);return;
     case'anular':ui.modal={k:'anular',id:v};break;
     case'okAnular':anular(v);return;
-    case'nuevoProd':ui.modal={k:'prod',id:null,f:{nombre:'',categoria:'',precio:'',stock:'',minimo:'5',ilimitado:false,agotado:false}};break;
-    case'editProd':{const p=S.productos[v];ui.modal={k:'prod',id:v,f:{nombre:p.nombre,categoria:p.categoria,precio:String(p.precio),stock:String(p.stock??0),minimo:String(p.minimo??0),ilimitado:!!p.ilimitado,agotado:!!p.agotado}};break}
+    case'nuevoProd':ui.modal={k:'prod',id:null,f:{nombre:'',categoria:'',precio:'',stock:'',minimo:'5',ilimitado:false,agotado:false,sabores:[],nuevoSabor:''}};break;
+    case'editProd':{const p=S.productos[v];ui.modal={k:'prod',id:v,f:{nombre:p.nombre,categoria:p.categoria,precio:String(p.precio),stock:String(p.stock??0),minimo:String(p.minimo??0),ilimitado:!!p.ilimitado,agotado:!!p.agotado,sabores:[...(p.sabores||[])],nuevoSabor:''}};break}
     case'okProd':guardarProd();return;
     case'borrarProd':ui.modal.borrar=true;break;
     case'okBorrar':{const n=S.productos[ui.modal.id]?.nombre;put('productos',ui.modal.id,null);ui.modal=null;toast(`${n} borrado.`);break}
@@ -999,6 +1027,9 @@ document.addEventListener('click',ev=>{
     case'papel':put('config','negocio',{...neg(),papel:v});toast(`Papel de ${v} mm guardado.`);break;
     case'probarImp':{const N=neg();const id='__prueba';S.ventas={...S.ventas,[id]:{serie:N.serie,numero:0,fecha:new Date().toISOString(),mesa:'Prueba',items:[{nombre:'Producto de prueba',precio:10,cant:2},{nombre:'Otro producto con nombre largo',precio:4.5,cant:1}],total:24.5,estado:'pagada',metodo:'Efectivo',recibido:30,vuelto:5.5}};imprimir(id);const n={...S.ventas};delete n[id];S.ventas=n;return}
     case'verPin':ui.verPin=!ui.verPin;break;
+    case'addSab':{const f=ui.modal.f;const nv=String(f.nuevoSabor||'').split(',').map(x=>x.trim()).filter(Boolean);if(!nv.length){toast('Escribe el nombre del sabor.','warn');return}f.sabores=[...new Set([...(f.sabores||[]),...nv])];f.nuevoSabor='';break}
+    case'quitaSab':ui.modal.f.sabores.splice(Number(v),1);break;
+    case'preImp':imprimirAntes(ui.modal?.mid||ui.mesa);return;
     case'okMigrar':migrar();return;
     case'okVacio':ui.modal=null;escuchar();return;
     case'entrarFid':entrarFid();return;
@@ -1045,13 +1076,14 @@ document.addEventListener('change',ev=>{
   if(t.dataset.restore!==undefined&&t.files&&t.files[0]){restaurar(t.files[0]);t.value='';return}
   if(t.dataset.agot){const p=S.productos[t.dataset.agot];if(p){put('productos',t.dataset.agot,{...clone(p),agotado:t.checked});render();toast(t.checked?`${p.nombre} marcado como agotado. Ya no se puede pedir.`:`${p.nombre} disponible otra vez.`,t.checked?'warn':'')}return}
   if(t.dataset.qty){setQty(ui.mesa,t.dataset.qty,t.value);return}
-  if(t.dataset.nota){const m=mesa(ui.mesa);const it=m.items.find(i=>i.pid===t.dataset.nota);if(it){const n=t.value.trim();if(n)it.nota=n;else delete it.nota;put('mesas',ui.mesa,m);render()}return}
+  if(t.dataset.nota){const m=mesa(ui.mesa);const it=m.items.find(i=>lk(i)===t.dataset.nota);if(it){const n=t.value.trim();if(n)it.nota=n;else delete it.nota;put('mesas',ui.mesa,m);render()}return}
   if(t.dataset.negc){put('config','negocio',{...neg(),[t.dataset.negc]:t.checked});render();toast(t.checked?'Se imprimirá automáticamente al cobrar.':'Impresión automática desactivada.');return}
   if(t.dataset.neg==='pin'){const val=t.value.trim();if(!/^\d{4}$/.test(val)){toast('El PIN debe tener exactamente 4 números.','bad');return}put('config','negocio',{...neg(),pin:val});encolar({t:'pin',pin:val});render();toast(fb.user?'PIN del cajero guardado.':'PIN guardado aquí. Inicia sesión para activarlo en las tarjetas.');return}
   if(t.dataset.neg){const N=neg();let val=t.value.trim();if(t.dataset.neg==='serie')val=val.toUpperCase()||'B001';if(t.dataset.neg==='nombre')val=val||'Mi negocio';put('config','negocio',{...N,[t.dataset.neg]:val});render();toast('Datos del negocio guardados.')}
 });
 document.addEventListener('keydown',ev=>{
   if(ev.key==='Escape'&&ui.modal&&ui.modal.k!=='migrar'){ui.modal=null;render()}
+  if(ev.key==='Enter'&&ev.target.id==='pf-sabor'){ev.preventDefault();document.querySelector('[data-act=addSab]')?.click();return}
   if(ev.key==='Enter'&&ev.target.id==='apertura'){ev.preventDefault();abrirCaja();return}
   if(ev.key==='Enter'&&ui.modal&&ev.target.tagName==='INPUT'&&ev.target.type!=='checkbox'){const ok=document.querySelector('.modal [data-act^="ok"]:not([disabled]):not([data-act=okBorrar]):not([data-act=okBorrarIns]):not([data-act=okDelVenta]):not([data-act=okDelEgr]):not([data-act=okCancelarPed]):not([data-act=okAnular])');if(ok){ev.preventDefault();ev.target.dispatchEvent(new Event('change',{bubbles:true}));setTimeout(()=>ok.click(),0)}}
   if(ev.key==='Enter'&&ev.target.id==='fid-pass'){ev.preventDefault();entrarFid();return}
